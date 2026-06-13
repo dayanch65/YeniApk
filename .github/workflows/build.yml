@@ -30,4 +30,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Uygulamam-APK
-          path: temp_app/build/app/outputs/flutter-apk/app-release-apk.apk
+          path: temp_app/build/app/outputs/flutter-apk/*.apk
