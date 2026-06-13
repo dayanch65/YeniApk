@@ -26,8 +26,8 @@ class _AnaGezintiState extends State<AnaGezinti> {
   int _index = 0;
   final List<Widget> _sayfalar = [
     const AnaSayfa(),
-    const GözlegSayfasi(),
-    const YuklenenlerSayfasi(),
+    const GozlegSayfasi(), // Gözleg -> Gozleg yapıldı
+    const YuklenenlerSayfasi(), // Yüklenenler -> Yuklenenler yapıldı
   ];
 
   @override
@@ -42,8 +42,8 @@ class _AnaGezintiState extends State<AnaGezinti> {
         onTap: (i) => setState(() => _index = i),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Ana'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Gözleg'),
-          BottomNavigationBarItem(icon: Icon(Icons.download), label: 'Ýüklenenler'),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Gozleg'),
+          BottomNavigationBarItem(icon: Icon(Icons.download), label: 'Yuklenenler'),
         ],
       ),
     );
@@ -65,9 +65,9 @@ class AnaSayfa extends StatelessWidget {
   }
 }
 
-// 2. GÖZLEG SAYFASI
-class GözlegSayfasi extends StatelessWidget {
-  const GözlegSayfasi({super.key});
+// 2. GOZLEG SAYFASI
+class GozlegSayfasi extends StatelessWidget {
+  const GozlegSayfasi({super.key});
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -86,18 +86,18 @@ class GözlegSayfasi extends StatelessWidget {
   }
 }
 
-// 3. YÜKLENENLER SAYFASI
+// 3. YUKLENENLER SAYFASI
 class YuklenenlerSayfasi extends StatelessWidget {
   const YuklenenlerSayfasi({super.key});
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Ýüklenenler"), backgroundColor: Colors.transparent),
+      appBar: AppBar(title: const Text("Yuklenenler"), backgroundColor: Colors.transparent),
       body: ListView.builder(
         itemCount: 3,
         itemBuilder: (c, i) => ListTile(
           leading: Container(width: 60, height: 80, color: Colors.grey),
-          title: const Text("Film Adı"),
+          title: const Text("Film Adi"),
           subtitle: const Text("2s 49m · 1.87 GB"),
           trailing: const Icon(Icons.download_done),
         ),
