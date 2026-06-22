@@ -1,4 +1,4 @@
-name: Flutter CI
+name: Flutter APK Builder
 
 on:
   push:
@@ -11,9 +11,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      # 1. Depoyu çek
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Flutter'ı kur
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x'
-      - run: flutter pub get
-      - run: flutter build apk
+
+      # 3. Sıfırdan temiz proje oluştur, senin kodlarını içine at
+      - name: Create fresh project
+        run: |
+          flutter create temp_app
+          cp -r lib/ temp_app/
+          cp pubspec.yaml temp_app/
+          # Eğer assets klasörün varsa onu da kopyala (çoğu projede var)
+          if [ -d "assets" ]; then cp -r assets/ temp_app/; fi
+
+      # 4. Bağımlılıkları yükle ve APK'yı derle
+      - name: Build APK
+        run: |
+          cd temp_app
+          flutter pub get
+          flutter build apk --release
+
+      # 5. APK dosyasını GitHub üzerinden indirilebilir hale getir
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Uygulamam-APK
+          # !! YOLU DÜZELTTİM: app-release.apk (apk uzantısı sadece 1 kere)
+          path: temp_app/build/app/outputs/flutter-apk/app-release.apk
