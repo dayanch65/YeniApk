@@ -1,33 +1,22 @@
-name: Flutter APK Build
-on: [push]
+name: Flutter Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      # 1. Adım: Flutter'ı kur
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x'
-          
-      # 2. Adım: Yeni bir Flutter projesi oluştur (eksik dosyaları bu tamamlayacak)
-      - name: Create flutter project
-        run: |
-          flutter create temp_app
-          cp -r lib/ temp_app/
-          cp pubspec.yaml temp_app/
-          
-      # 3. Adım: Projenin içine gir ve APK al
-      - name: Build APK
-        run: |
-          cd temp_app
-          flutter pub get
-          flutter build apk --release
-          
-      # 4. Adım: APK dosyasını sana gönder
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Uygulamam-APK
-          path: temp_app/build/app/outputs/flutter-apk/*.apk
+      - run: flutter pub get
+      - run: flutter build apk
