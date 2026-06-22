@@ -8,14 +8,14 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  @key
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(title: const Text('DropdownSearch Örneği')),
-        body: Padding(
-          padding: const EdgeInsets.all(20.0),
+        body: const Padding(
+          padding: EdgeInsets.all(20.0),
           child: Center(
             child: ColorDropdown(),
           ),
@@ -25,21 +25,32 @@ class MyApp extends StatelessWidget {
   }
 }
 
+class ColorItem {
+  final String name;
+  final Color color;
+  ColorItem(this.name, this.color);
+
+  @override
+  String toString() => name;
+}
+
 class ColorDropdown extends StatelessWidget {
   const ColorDropdown({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Tip tanımı: (String, Color) Record yapısı
-    return DropdownSearch<(String, Color)>(
-      // Yeni sürümlerde clickProps yerine decoratorProps veya açılır menü özellikleri kullanılır
+    final items = <ColorItem>[
+      ColorItem("Red", Colors.red),
+      ColorItem("Black", Colors.black),
+      ColorItem("Yellow", Colors.yellow),
+      ColorItem("Blue", Colors.blue),
+    ];
+
+    return DropdownSearch<ColorItem>(
+      items: items,
       popupProps: PopupProps.menu(
-        menuProps: const MenuProps(
-          align: MenuAlign.bottom,
-          backgroundColor: Colors.white,
-        ),
-        fit: FlexFit.loose,
-        itemBuilder: (context, item, isDisabled, isSelected) => Padding(
+        showSearchBox: true,
+        itemBuilder: (context, item, isSelected) => Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
             children: [
@@ -47,31 +58,28 @@ class ColorDropdown extends StatelessWidget {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: item.$2,
+                  color: item?.color ?? Colors.transparent,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
-                item.$1,
+                item?.name ?? '',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ],
           ),
         ),
       ),
-      items: (filter, loadProps) => [
-        ("Red", Colors.red),
-        ("Black", Colors.black),
-        ("Yellow", Colors.yellow),
-        ("Blue", Colors.blue),
-      ],
-      compareFn: (item1, item2) => item1.$1 == item2.$1,
+      compareFn: (item1, item2) => item1?.name == item2?.name,
       dropdownBuilder: (ctx, selectedItem) => Icon(
         Icons.face,
-        color: selectedItem?.$2 ?? Colors.grey,
+        color: selectedItem?.color ?? Colors.grey,
         size: 54,
       ),
+      onChanged: (v) {},
+      // Eğer seçili öğeyi yazdırmak isterseniz itemAsString da ekleyebilirsiniz:
+      // itemAsString: (ColorItem? c) => c?.name ?? '',
     );
   }
 }
