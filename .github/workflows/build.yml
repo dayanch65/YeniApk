@@ -7,28 +7,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # 1. Adım: Flutter'ı kur
-      - uses: subosito/flutter-action@v2
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
-          flutter-version: '3.x'
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.x' # Projene uygun stabil bir sürüm
+          channel: 'stable'
           
-      # 2. Adım: Yeni bir Flutter projesi oluştur (eksik dosyaları bu tamamlayacak)
-      - name: Create flutter project
-        run: |
-          flutter create temp_app
-          cp -r lib/ temp_app/
-          cp pubspec.yaml temp_app/
+      - name: Install Dependencies
+        run: flutter pub get
           
-      # 3. Adım: Projenin içine gir ve APK al
       - name: Build APK
-        run: |
-          cd temp_app
-          flutter pub get
-          flutter build apk --release
+        run: flutter build apk --release
           
-      # 4. Adım: APK dosyasını sana gönder
-      - uses: actions/upload-artifact@v4
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: Uygulamam-APK
-          path: temp_app/build/app/outputs/flutter-apk/app-release-apk.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           
