@@ -1,33 +1,22 @@
-name: Flutter APK Build
-on: [push]
+name: my_awesome_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+environment:
+  sdk: '>=3.0.0 <4.0.0'
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.x' # Projene uygun stabil bir sürüm
-          channel: 'stable'
-          
-      - name: Install Dependencies
-        run: flutter pub get
-          
-      - name: Build APK
-        run: flutter build apk --release
-          
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Uygulamam-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
-          
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  dropdown_search: ^6.0.1 # En güncel ve stabil dropdown_search sürümü
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  
