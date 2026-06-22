@@ -1,5 +1,5 @@
 DropdownSearch<String>(
-  items: (filter, infiniteScrollProps) => ['Item 1', 'Item 2', 'Item 3'],
+  items: ['Item 1', 'Item 2', 'Item 3'], // !! Fonksiyon değil, direkt liste ver !!
   suffixProps: DropdownSuffixProps(
     dropdownButtonProps: DropdownButtonProps(
       iconClosed: Icon(Icons.keyboard_arrow_down),
