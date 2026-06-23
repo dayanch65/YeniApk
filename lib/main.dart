@@ -31,7 +31,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // !!! BURAYA TABLETİNİN IP ADRESİNİ YAZMALISIN !!!
   // Örnek: ws://192.168.1.5:8000
   final WebSocketChannel _channel = WebSocketChannel.connect(
-    Uri.parse('ws://192.168.1.X:8000'), 
+    Uri.parse('ws://192.168.1.110:8000'), 
   );
 
   List<String> messages = [];
