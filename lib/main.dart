@@ -1,58 +1,67 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
-  runApp(const VideoApp());
+  runApp(const MyApp());
 }
 
-class VideoApp extends StatelessWidget {
-  const VideoApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '⚡ Flutter Video Player',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(), // Videolar karanlık temada daha iyi görünür
-      home: const VideoPlayerScreen(),
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const ChatScreen(),
     );
   }
 }
 
-class VideoPlayerScreen extends StatefulWidget {
-  const VideoPlayerScreen({super.key});
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
 
   @override
-  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+  State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  late VideoPlayerController _controller;
-  late Future<void> _initializeVideoPlayerFuture;
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _controller = TextEditingController();
+  
+  // !!! BURAYA TABLETİNİN IP ADRESİNİ YAZMALISIN !!!
+  // Örnek: ws://192.168.1.5:8000
+  final WebSocketChannel _channel = WebSocketChannel.connect(
+    Uri.parse('ws://192.168.1.X:8000'), 
+  );
+
+  List<String> messages = [];
 
   @override
   void initState() {
     super.initState();
-
-    // 1. SEÇENEK: İnternetteki bir video linkini oynatmak için (Şu an bu aktif):
-    _controller = VideoPlayerController.networkUrl(
-      Uri.parse('https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4'),
-    );
-
-    // 2. SEÇENEK: APK içine koyduğun videoyu oynatmak için (Üsttekini kapatıp bunu açabilirsin):
-    // _controller = VideoPlayerController.asset('assets/video.mp4');
-
-    // Videoyu yükle ve hazır hale getir
-    _initializeVideoPlayerFuture = _controller.initialize().then((_) {
-      // Video yüklendiğinde ekranı güncelle ve otomatik döngüye al
-      _controller.setLooping(true);
-      setState(() {});
+    // Sunucudan gelen mesajları sürekli dinle
+    _channel.stream.listen((message) {
+      setState(() {
+        messages.add("Arkadaşın: $message");
+      });
     });
+  }
+
+  void _sendMessage() {
+    if (_controller.text.isNotEmpty) {
+      // Mesajı sunucuya gönder
+      _channel.sink.add(_controller.text);
+      
+      setState(() {
+        messages.add("Sen: ${_controller.text}");
+      });
+      _controller.clear();
+    }
   }
 
   @override
   void dispose() {
-    // Ekrandan çıkıldığında video işlemcisini kapat (Hafıza kartını yormasın)
+    _channel.sink.close(); // Uygulama kapanırken bağlantıyı güvenli kapat
     _controller.dispose();
     super.dispose();
   }
@@ -60,62 +69,38 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('🎬 Video Oynatıcı'),
-        centerTitle: true,
-      ),
-      body: FutureBuilder(
-        future: _initializeVideoPlayerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // Video başarıyla yüklendiyse ekranda göster
-            return Center(
-              child: AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: Stack(
-                  alignment: Alignment.bottomCenter,
-                  children: [
-                    VideoPlayer(_controller),
-                    // Alt kısma ilerleme çubuğu ekleyelim
-                    VideoProgressIndicator(
-                      _controller,
-                      allowScrubbing: true, // Elle ileri sarma izni
-                      colors: const VideoProgressColors(
-                        playedColor: Colors.red,
-                        bufferedColor: Colors.grey,
-                        backgroundColor: Colors.black,
-                      ),
-                    ),
-                  ],
+      appBar: AppBar(title: const Text('Dayanç Imo Chat')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // Mesajların Listelendiği Alan
+            Expanded(
+              child: ListView.builder(
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    title: Text(messages[index]),
+                  );
+                },
+              ),
+            ),
+            // Mesaj Yazma ve Gönderme Alanı
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(labelText: 'Mesaj yazın...'),
+                  ),
                 ),
-              ),
-            );
-          } else {
-            // Video henüz yükleniyorsa loading dönen çemberi göster
-            return const Center(
-              child: CircularProgressIndicator(
-                color: Colors.red,
-              ),
-            );
-          }
-        },
-      ),
-      // Oynat / Durdur Butonu
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.red,
-        onPressed: () {
-          setState(() {
-            // Video oynatılıyorsa durdur, duruyorsa oynat
-            if (_controller.value.isPlaying) {
-              _controller.pause();
-            } else {
-              _controller.play();
-            }
-          });
-        },
-        child: Icon(
-          _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-          color: Colors.white,
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: _sendMessage,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
