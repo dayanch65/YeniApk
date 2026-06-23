@@ -33,14 +33,16 @@ class _HomePageState extends State<HomePage> {
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: DropdownSearch<String>(
-          items: const ['Item 1', 'Item 2', 'Item 3'],
-          dropdownButtonProps: DropdownButtonProps(
-            icon: const Icon(Icons.keyboard_arrow_down),
+          items: (filter, infiniteScrollProps) => ['Item 1', 'Item 2', 'Item 3'],
+          suffixProps: DropdownSuffixProps(
+            dropdownButtonProps: DropdownButtonProps(
+              iconClosed: const Icon(Icons.keyboard_arrow_down),
+              iconOpened: const Icon(Icons.keyboard_arrow_up),
+            ),
           ),
-          dropdownDecoratorProps: DropDownDecoratorProps(
+          decoratorProps: DropDownDecoratorProps(
             textAlign: TextAlign.center,
-            baseStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            dropdownSearchDecoration: InputDecoration(
+            decoration: InputDecoration(
               contentPadding: const EdgeInsets.symmetric(vertical: 20),
               filled: true,
               fillColor: Colors.white,
