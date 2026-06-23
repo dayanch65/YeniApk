@@ -1,4 +1,26 @@
+name: video_player_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+# 1. BAĞIMLILIKLAR (Kütüphaneler) BURAYA YAZILIR:
+dependencies:
+  flutter:
+    sdk: flutter
+  video_player: ^2.9.2 # Video oynatma kütüphanesi
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+# 2. VARLIKLAR (Videolar, Resimler) FLUTTER ETİKETİNİN ALTINA YAZILIR:
 flutter:
+  uses-material-design: true
+
   assets:
-    - assets/video.mp4
+    - assets/video.mp4 # Videonun yolu (Önünde 4 boşluk olmalı)
     
