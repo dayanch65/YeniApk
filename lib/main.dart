@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 void main() {
-  // Android yerel ağ (HTTP/WS) bağlantı engelini KOD İÇİNDEN tamamen kaldırıyoruz
+  // Android yerel ağ (Cleartext) güvenlik duvarını aşan kod
   HttpOverrides.global = MyHttpOverrides();
   runApp(const MyApp());
 }
 
-// Güvenlik duvarını ve cleartext engelini aşan sınıf
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -24,29 +23,86 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const ChatScreen(),
+      title: 'Dayanç Chat',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const LoginScreen(), // Uygulama artık IP sorma ekranıyla başlıyor
     );
   }
 }
 
+// --- 1. EKRAN: IP ADRESİ GİRME EKRANI ---
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  // Senin tabletin IP'sini varsayılan olarak kutuya yazdık, istersen silip değiştirebilirsin
+  final TextEditingController _ipController = TextEditingController(text: "192.168.1.110");
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Sunucuya Bağlan")),
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Tabletteki Termux IP Adresini Girin:",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _ipController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: "Örn: 192.168.1.110",
+                prefixIcon: Icon(Icons.wifi),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+              ),
+              onPressed: () {
+                // IP adresini al ve Chat Ekranına geç
+                if (_ipController.text.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatScreen(ipAddress: _ipController.text),
+                    ),
+                  );
+                }
+              },
+              child: const Text("Bağlan ve Mesajlaş", style: TextStyle(fontSize: 16)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- 2. EKRAN: MESAJLAŞMA EKRANI ---
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  final String ipAddress;
+  const ChatScreen({super.key, required this.ipAddress});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _controller = TextEditingController();
+  final TextEditingController _msgController = TextEditingController();
   final List<String> messages = [];
-  
   late WebSocketChannel _channel;
-  bool isConnected = false;
-  String connectionStatus = "Bağlanıyor...";
 
   @override
   void initState() {
@@ -54,15 +110,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _connectToServer();
   }
 
-  // Sunucuya bağlanma fonksiyonu
   void _connectToServer() {
     try {
-      // Senin tabletinin IP adresi ve portu
+      // Bir önceki ekrandan girilen IP adresini kullanarak bağlanıyor
       _channel = WebSocketChannel.connect(
-        Uri.parse('ws://192.168.1.110:8000'),
+        Uri.parse('ws://${widget.ipAddress}:8000'),
       );
 
-      // Gelen mesajları dinle
       _channel.stream.listen(
         (message) {
           setState(() {
@@ -71,49 +125,30 @@ class _ChatScreenState extends State<ChatScreen> {
         },
         onError: (error) {
           setState(() {
-            connectionStatus = "Hata Oluştu! Tekrar deneniyor...";
-            isConnected = false;
+            messages.add("⚠️ SİSTEM: Bağlantı hatası! Termux açık mı? Aynı Wi-Fi'de misiniz?");
           });
-          // Hata olursa 3 saniye sonra otomatik tekrar bağlanmayı dene
-          Future.delayed(const Duration(seconds: 3), _connectToServer);
-        },
-        onDone: () {
-          setState(() {
-            connectionStatus = "Bağlantı Kesildi! Tekrar bağlanıyor...";
-            isConnected = false;
-          });
-          Future.delayed(const Duration(seconds: 3), _connectToServer);
         },
       );
-
-      setState(() {
-        isConnected = true;
-        connectionStatus = "Bağlantı Başarılı!";
-      });
     } catch (e) {
       setState(() {
-        connectionStatus = "Bağlantı Başarısız: $e";
-        isConnected = false;
+        messages.add("⚠️ SİSTEM: Kritik Hata: $e");
       });
     }
   }
 
   void _sendMessage() {
-    if (_controller.text.isNotEmpty && isConnected) {
-      // Mesajı ağ üzerinden sunucuya gönderir
-      _channel.sink.add(_controller.text);
-      
+    if (_msgController.text.isNotEmpty) {
+      _channel.sink.add(_msgController.text);
       setState(() {
-        messages.add("Sen: ${_controller.text}");
+        messages.add("Sen: ${_msgController.text}");
       });
-      _controller.clear();
+      _msgController.clear();
     }
   }
 
   @override
   void dispose() {
     _channel.sink.close();
-    _controller.dispose();
     super.dispose();
   }
 
@@ -121,78 +156,48 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dayanç Imo Chat'),
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white,
-        actions: [
-          // Bağlantı durumunu gösteren küçük bir ışık/yazı
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.circle,
-                  color: isConnected ? Colors.green : Colors.red,
-                  size: 12,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  connectionStatus,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          )
-        ],
+        title: Text("Bağlı: ${widget.ipAddress}"),
+        backgroundColor: Colors.green,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Mesaj Listesi
-            Expanded(
-              child: ListView.builder(
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  final msg = messages[index];
-                  final isMe = msg.startsWith("Sen:");
-                  return Align(
-                    alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isMe ? Colors.blue[100] : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(msg),
-                    ),
-                  );
-                },
-              ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(10),
+              itemCount: messages.length,
+              itemBuilder: (context, index) {
+                return Card(
+                  color: messages[index].startsWith("Sen:") ? Colors.blue[100] : Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(messages[index], style: const TextStyle(fontSize: 16)),
+                  ),
+                );
+              },
             ),
-            const Divider(),
-            // Giriş Alanı
-            Row(
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _controller,
+                    controller: _msgController,
                     decoration: const InputDecoration(
-                      hintText: 'Mesaj yazın...',
+                      hintText: "Mesaj gönder...",
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
-                  onPressed: isConnected ? _sendMessage : null, // Bağlı değilse buton basmaz
+                FloatingActionButton(
+                  onPressed: _sendMessage,
+                  child: const Icon(Icons.send),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
