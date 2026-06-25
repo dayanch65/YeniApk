@@ -1,5 +1,5 @@
 // main.dart
-import 'kolay_flutter.dart'; // Kendi kütüphaneni buraya bağlıyorsun
+import 'Main3.dart'; // Kendi kütüphaneni buraya bağlıyorsun
 
 void main() {
   // runApp yerine kendi takma adımız!
