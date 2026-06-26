@@ -27,8 +27,13 @@ jobs:
           flutter create temp_app
           cp -r lib/ temp_app/
           cp pubspec.yaml temp_app/
-          # Eğer assets klasörün varsa onu da kopyala (çoğu projede var)
+          # Eğer assets klasörün varsa onu da kopyala
           if [ -d "assets" ]; then cp -r assets/ temp_app/; fi
+
+      # 🔥 YENİ ADIM: İnternet İznini temp_app içindeki Android dosyasına otomatik yaz
+      - name: Inject Android Internet Permission
+        run: |
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />' temp_app/android/app/src/main/AndroidManifest.xml
 
       # 4. Bağımlılıkları yükle ve APK'yı derle
       - name: Build APK
@@ -42,5 +47,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Uygulamam-APK
-          # !! YOLU DÜZELTTİM: app-release.apk (apk uzantısı sadece 1 kere)
           path: temp_app/build/app/outputs/flutter-apk/app-release.apk
+          
