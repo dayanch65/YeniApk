@@ -1,5 +1,5 @@
-name: video_player_app  # İstersen adını chat_app yapabilirsin ama şart değil
-description: "A new Flutter project."
+name: dayanc_nav_app
+description: "Dayanc App"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,8 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Video player'ı kaldırdık, yerine WebSocket ekledik:
-  web_socket_channel: ^3.0.1 
+  google_nav_bar: ^5.0.6
 
 dev_dependencies:
   flutter_test:
@@ -19,5 +18,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Eğer yerel resim/asset kullanmayacaksan assets kısmını silebilirsin.
   
