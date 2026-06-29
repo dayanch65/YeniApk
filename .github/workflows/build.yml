@@ -1,127 +1,43 @@
-name: Dayanc Telsiz App Build
+name: Flutter Otomatik Android ve Izin Oluşturucu
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+on: [push] # GitHub'a kodu yüklediğin an çalışır
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v4
+      - name: Java Kurulumu
+        uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Flutter Kurulumu
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
-      - name: Show environment & Flutter info (diagnostic)
+      # 1. ADIM: GitHub senin için tüm Android klasörünü sıfırdan oluşturuyor
+      - name: Android Klasörünü Sıfırdan Yarat
+        run: flutter create --platforms=android .
+
+      # 2. ADIM: Sesli arama için gereken Mikrofon ve Wi-Fi izinlerini koda enjekte ediyor
+      - name: Android Izinlerini Otomatik Enjekte Et
         run: |
-          echo "RUNNER_OS=$RUNNER_OS"
-          echo "JAVA_HOME=${JAVA_HOME:-not-set}"
-          echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
-          flutter --version || true
-          flutter doctor -v || true
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          PERMISSIONS="<uses-permission android:name=\"android:permission.INTERNET\"/>\n    <uses-permission android:name=\"android:permission.RECORD_AUDIO\"/>\n    <uses-permission android:name=\"android:permission.MODIFY_AUDIO_SETTINGS\"/>\n    <uses-permission android:name=\"android:permission.ACCESS_WIFI_STATE\"/>"
+          sed -i "s|<manifest[^>]*>|&\n    $PERMISSIONS|" $MANIFEST_PATH
 
-      - name: Create Flutter project if missing (ensures android/ exists)
-        run: |
-          flutter create . --force --org com.dayanc.telsiz
-          echo "ls android:"
-          ls -la android || true
-          echo "ls android/app/src/main:"
-          ls -la android/app/src/main || true
+      # 3. ADIM: Uygulamayı test edebilmen için APK çıktısı üretiyor
+      - name: APK Çıktısı Üret
+        run: flutter build apk --debug
 
-      - name: Accept Android SDK licenses (if sdkmanager present)
-        run: |
-          if command -v sdkmanager >/dev/null 2>&1; then
-            echo "sdkmanager found, accepting licenses..."
-            yes | sdkmanager --licenses || true
-          else
-            echo "sdkmanager not found, skipping license acceptance."
-          fi
-
-      - name: Debug - show AndroidManifest before modification
-        run: |
-          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            echo "---- AndroidManifest.xml (first 200 lines) ----"
-            sed -n '1,200p' android/app/src/main/AndroidManifest.xml || true
-            echo "---- end ----"
-          else
-            echo "AndroidManifest.xml not found yet."
-          fi
-
-      - name: Safely inject required Android permissions (if missing)
-        run: |
-          python3 - <<'PY'
-          import sys, os
-          path = "android/app/src/main/AndroidManifest.xml"
-          if not os.path.exists(path):
-              print("SKIP: AndroidManifest.xml not found at", path)
-              sys.exit(0)
-          with open(path, "r", encoding="utf-8") as f:
-              content = f.read()
-          # If a representative permission is already present, skip
-          if "android.permission.RECORD_AUDIO" in content or "android.permission.INTERNET" in content:
-              print("Permissions already present, skipping injection.")
-              sys.exit(0)
-          permissions = (
-              '    <uses-permission android:name="android.permission.INTERNET"/>\n'
-              '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n'
-              '    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>\n'
-              '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n'
-          )
-          # Insert permissions before the first <application ...> tag (safe)
-          idx = content.find("<application")
-          if idx != -1:
-              new = content[:idx] + permissions + content[idx:]
-              with open(path, "w", encoding="utf-8") as f:
-                  f.write(new)
-              print("Permissions injected before <application> tag.")
-          else:
-              # Fallback: insert after the end of the opening <manifest ...> tag
-              mstart = content.find("<manifest")
-              if mstart != -1:
-                  mend = content.find(">", mstart)
-                  if mend != -1:
-                      new = content[:mend+1] + "\n" + permissions + content[mend+1:]
-                      with open(path, "w", encoding="utf-8") as f:
-                          f.write(new)
-                      print("Permissions injected after <manifest> tag (fallback).")
-                  else:
-                      print("Could not find end of <manifest> start tag; file left unchanged.")
-              else:
-                  print("Could not find <application> or <manifest> tag; file left unchanged.")
-          PY
-
-      - name: Debug - show AndroidManifest after modification
-        run: |
-          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            echo "---- AndroidManifest.xml (first 200 lines) AFTER ----"
-            sed -n '1,200p' android/app/src/main/AndroidManifest.xml || true
-            echo "---- end ----"
-          else
-            echo "AndroidManifest.xml not found."
-          fi
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build APK (release)
-        run: flutter build apk --release
-
-      - name: Upload APK artifact
-        if: success()
+      # 4. ADIM: Üretilen APK'yı GitHub Actions panelinden indirilebilir yapıyor
+      - name: APK'yi Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: Dayanc-Telsiz-SMS-Uygulamasi
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: sesli-arama-uygulamasi
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          
