@@ -8,10 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # fallbacklar: subosito action tipik olarak ANDROID_SDK_ROOT ayarlar
-      ANDROID_HOME: ${{ env.ANDROID_HOME }}
-      ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
     steps:
       - name: Checkout
@@ -30,24 +26,28 @@ jobs:
 
       - name: Show environment & Flutter info (diagnostic)
         run: |
-          echo "JAVA_HOME=$JAVA_HOME"
+          echo "RUNNER_OS=$RUNNER_OS"
+          echo "JAVA_HOME=${JAVA_HOME:-not-set}"
           echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
-          flutter --version
-          flutter doctor -v
+          flutter --version || true
+          flutter doctor -v || true
 
-      - name: Create Flutter project (if missing) / ensure android folder
+      - name: Create Flutter project if missing (ensures android/ exists)
         run: |
           flutter create . --force --org com.dayanc.telsiz
-          ls -la
+          echo "ls android:"
+          ls -la android || true
+          echo "ls android/app/src/main:"
+          ls -la android/app/src/main || true
 
-      - name: Accept Android SDK licenses (best-effort)
+      - name: Accept Android SDK licenses (if sdkmanager present)
         run: |
-          SDKMANAGER="${ANDROID_SDK_ROOT:-$ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
-          if [ -x "$SDKMANAGER" ]; then
-            yes | "$SDKMANAGER" --licenses || true
+          if command -v sdkmanager >/dev/null 2>&1; then
+            echo "sdkmanager found, accepting licenses..."
+            yes | sdkmanager --licenses || true
           else
-            echo "sdkmanager not found at $SDKMANAGER - skipping license accept (may be fine)."
+            echo "sdkmanager not found, skipping license acceptance."
           fi
 
       - name: Debug - show AndroidManifest before modification
@@ -63,15 +63,15 @@ jobs:
       - name: Safely inject required Android permissions (if missing)
         run: |
           python3 - <<'PY'
-          import sys, io, os
+          import sys, os
           path = "android/app/src/main/AndroidManifest.xml"
           if not os.path.exists(path):
               print("SKIP: AndroidManifest.xml not found at", path)
               sys.exit(0)
           with open(path, "r", encoding="utf-8") as f:
               content = f.read()
-          # quick check: if permission already present skip
-          if "android.permission.RECORD_AUDIO" in content:
+          # If a representative permission is already present, skip
+          if "android.permission.RECORD_AUDIO" in content or "android.permission.INTERNET" in content:
               print("Permissions already present, skipping injection.")
               sys.exit(0)
           permissions = (
@@ -88,8 +88,7 @@ jobs:
                   f.write(new)
               print("Permissions injected before <application> tag.")
           else:
-              # Fallback: try to insert right after opening <manifest ...> tag end '>'
-              # Find end of the first <manifest ...> start tag
+              # Fallback: insert after the end of the opening <manifest ...> tag
               mstart = content.find("<manifest")
               if mstart != -1:
                   mend = content.find(">", mstart)
@@ -98,8 +97,10 @@ jobs:
                       with open(path, "w", encoding="utf-8") as f:
                           f.write(new)
                       print("Permissions injected after <manifest> tag (fallback).")
-                      sys.exit(0)
-              print("WARNING: Could not find <application> or <manifest> tag; file left unchanged.")
+                  else:
+                      print("Could not find end of <manifest> start tag; file left unchanged.")
+              else:
+                  print("Could not find <application> or <manifest> tag; file left unchanged.")
           PY
 
       - name: Debug - show AndroidManifest after modification
@@ -117,7 +118,6 @@ jobs:
 
       - name: Build APK (release)
         run: flutter build apk --release
-        # Eğer çok uzun sürerse isterseniz timeout ekleyebilirsiniz
 
       - name: Upload APK artifact
         if: success()
