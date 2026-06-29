@@ -24,9 +24,9 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Flutter Projesini Sifirdan Olustur
+      - name: Android Dosyalarini ve Projeyi Sifirdan Olustur
         run: |
-          flutter create . --force --org com.dayanc.telsiz
+          flutter create --project-name=yerel_iletisim_uygulamasi --org com.dayanc.telsiz --force .
 
       - name: pubspec.yaml Dosyasini Otomatik Yaz
         run: |
@@ -339,21 +339,36 @@ jobs:
           }
           EOF
 
-      - name: Android Manifest Izinlerini Otomatik Enjekte Et
+      - name: Android Ayarlarini ve Izinlerini Otomatik Enjekte Et
         run: |
           python3 - << 'EOF'
-          path = "android/app/src/main/AndroidManifest.xml"
-          with open(path, "r") as f:
-              content = f.read()
+          # 1. Android Manifest Izinlerini Düzgünce Ekle
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          with open(manifest_path, "r") as f:
+              m_content = f.read()
+          
           permissions = """
               <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.RECORD_AUDIO"/>
               <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
           """
-          content = content.replace("<manifest", "<manifest" + permissions)
-          with open(path, "w") as f:
-              f.write(content)
+          # Izinleri uygulamanın tag'inin hemen üzerine güvenli bir sekilde ekliyoruz
+          m_content = m_content.replace("<application", permissions + "\n    <application")
+          
+          with open(manifest_path, "w") as f:
+              f.write(m_content)
+
+          # 2. Ses Paketi Icin MinSdkVersion Degerini 21 Yap
+          gradle_path = "android/app/build.gradle"
+          with open(gradle_path, "r") as f:
+              g_content = f.read()
+          
+          g_content = g_content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+          
+          with open(gradle_path, "w") as f:
+              f.write(g_content)
+          print("Android manifest ve gradle ayarlari basariyla yapildi!")
           EOF
 
       - name: Paketleri Yukle
