@@ -1,278 +1,169 @@
 import 'dart:io';
-import 'dart:convert';
-import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:sound_stream/sound_stream.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:network_info_plus/network_info_plus.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const YerelIletisimUygulamasi());
-}
+void main() => runApp(const MaterialApp(home: SesliAramaUygulamasi()));
 
-class YerelIletisimUygulamasi extends StatelessWidget {
-  const YerelIletisimUygulamasi({super.key});
+class SesliAramaUygulamasi extends StatefulWidget {
+  const SesliAramaUygulamasi({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-        appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF141415)),
-      ),
-      home: const AnaIletisimEkrani(),
-    );
-  }
+  State<SesliAramaUygulamasi> createState() => _SesliAramaUygulamasiState();
 }
 
-class AnaIletisimEkrani extends StatefulWidget {
-  const AnaIletisimEkrani({super.key});
+class _SesliAramaUygulamasiState extends State<SesliAramaUygulamasi> {
+  // Ses kütüphanesinin yönetim nesneleri
+  final RecorderStream _sesKaydedici = RecorderStream();
+  final PlayerStream _sesOynatici = PlayerStream();
 
-  @override
-  State<AnaIletisimEkrani> createState() => _AnaIletisimEkraniState();
-}
-
-class _AnaIletisimEkraniState extends State<AnaIletisimEkrani> {
-  final SoundStreamRecorder _sesKaydedici = SoundStreamRecorder();
-  final SoundStreamPlayer _sesOynatici = SoundStreamPlayer();
+  // Ağ bağlantı nesneleri
+  ServerSocket? _sunucuSoketi;
+  Socket? _baglantiSoketi;
   
-  ServerSocket? _tcpMesajSunucusu;
-  RawDatagramSocket? _udpSesSoketi;
-  
-  String _cihazIpAdresi = "Yükleniyor...";
-  bool _sesliAramaAktifMi = false;
-
-  final TextEditingController _hedefIpController = TextEditingController();
-  final TextEditingController _mesajController = TextEditingController();
-  final List<String> _mesajGecmisi = [];
+  final TextEditingController _ipKontrolcu = TextEditingController();
+  bool _aramaAktifMi = false;
+  String _durumMesaji = "Bağlantı bekleniyor...";
 
   @override
   void initState() {
     super.initState();
-    _sistemiVeIzinleriKur();
+    _izinleriVeSesiHazirla();
   }
 
-  void _sistemiVeIzinleriKur() async {
-    await [Permission.microphone, Permission.phone].request();
-
+  // Cihazdan mikrofon izni alma ve ses motorunu açma adımı
+  Future<void> _izinleriVeSesiHazirla() async {
+    await Permission.microphone.request();
     await _sesKaydedici.initialize();
     await _sesOynatici.initialize();
+  }
 
-    final info = NetworkInfo();
-    String? ip = await info.getWifiIP();
-    
-    if (ip == null || ip.isEmpty) {
-      ip = "192.168.43.1 (Veya Wi-Fi Bağlanın)";
+  // --- 1. TELEFON: SUNUCU (HOST) OLMA KODLARI ---
+  Future<void> _sunucuBaslat() async {
+    try {
+      // Telefonun Wi-Fi ağındaki her IP'yi dinleyecek şekilde 4444 portundan sunucu açıyoruz
+      _sunucuSoketi = await ServerSocket.bind(InternetAddress.anyIPv4, 4444);
+      setState(() {
+        _durumMesaji = "Sunucu açıldı! Diğer telefondan bu IP'ye bağlanın.";
+      });
+
+      // İkinci telefon bağlandığı an burası tetiklenir
+      _sunucuSoketi!.listen((Socket istemci) {
+        _baglantiSoketi = istemci;
+        _aramayiBaslat();
+      });
+    } catch (e) {
+      setState(() => _durumMesaji = "Sunucu başlatılamadı: $e");
     }
+  }
 
+  // --- 2. TELEFON: İSTEMCİ (CLIENT) OLMA KODLARI ---
+  Future<void> _sunucuyaBaglan() async {
+    if (_ipKontrolcu.text.isEmpty) return;
+    try {
+      // Kutudan yazılan IP adresine ve 4444 portuna bağlantı isteği atıyoruz
+      _baglantiSoketi = await Socket.connect(_ipKontrolcu.text, 4444);
+      _aramayiBaslat();
+    } catch (e) {
+      setState(() => _durumMesaji = "Bağlantı hatası: $e");
+    }
+  }
+
+  // --- ORTAK SES TRANSFER MANTIĞI ---
+  void _aramayiBaslat() {
     setState(() {
-      _cihazIpAdresi = ip!;
+      _aramaAktifMi = true;
+      _durumMesaji = "Arama başladı! Konuşabilirsiniz.";
     });
 
-    try {
-      _tcpMesajSunucusu = await ServerSocket.bind(InternetAddress.anyIPv4, 4444);
-      _tcpMesajSunucusu!.listen((Socket istemci) {
-        istemci.listen((List<int> veri) {
-          String gelenMesaj = utf8.decode(veri);
-          setState(() {
-            _mesajGecmisi.add("Karşı Taraf: $gelenMesaj");
-          });
-        });
-      });
-    } catch (e) {
-      debugPrint("TCP Sunucu Hatası: $e");
-    }
+    // Hoparlörü ve mikrofonu aktif ediyoruz
+    _sesKaydedici.start();
+    _sesOynatici.start();
 
-    try {
-      _udpSesSoketi = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 5555);
-      _udpSesSoketi!.listen((RawSocketEvent etkinlik) {
-        if (etkinlik == RawSocketEvent.read) {
-          Datagram? paket = _udpSesSoketi!.receive();
-          if (paket != null) {
-            _sesOynatici.writeChunk(paket.data);
-          }
-        }
-      });
-    } catch (e) {
-      debugPrint("UDP Soket Hatası: $e");
-    }
-
-    _sesKaydedici.audioStream.listen((List<int> sesVerisi) {
-      if (_sesliAramaAktifMi && _hedefIpController.text.isNotEmpty) {
-        try {
-          _udpSesSoketi?.send(
-            sesVerisi,
-            InternetAddress(_hedefIpController.text.trim()),
-            5555,
-          );
-        } catch (e) {
-          debugPrint("Ses Paketi Gönderim Hatası: $e");
-        }
-      }
+    // A) MİKROFONDAN GELEN SESİ KARŞIYA GÖNDERME:
+    // Mikrofon ortamdaki sesi yakaladıkça bu dinleyici tetiklenir ve veriyi sokete yazar
+    _sesKaydedici.audioStream.listen((Uint8List sesVerisi) {
+      _baglantiSoketi?.add(sesVerisi);
     });
+
+    // B) KARŞIDAN GELEN SESİ HOPARLÖRDEN ÇALMA:
+    // Soketten (karşı telefondan) ses verisi geldikçe bunu hoparlör akışına yazıp çaldırıyoruz
+    _baglantiSoketi!.listen(
+      (Uint8List gelenSesVerisi) {
+        _sesOynatici.writeChunk(gelenSesVerisi);
+      },
+      onDone: _aramayiKapat,
+      onError: (e) => _aramayiKapat(),
+    );
   }
 
-  void _mesajGonder() async {
-    String hedefIp = _hedefIpController.text.trim();
-    String mesaj = _mesajController.text.trim();
-
-    if (hedefIp.isEmpty || mesaj.isEmpty) return;
-
-    try {
-      Socket soket = await Socket.connect(hedefIp, 4444, timeout: const Duration(seconds: 2));
-      soket.write(mesaj);
-      await soket.flush();
-      await soket.close();
-
-      setState(() {
-        _mesajGecmisi.add("Ben: $mesaj");
-        _mesajController.clear();
-      });
-    } catch (e) {
-      setState(() {
-        _mesajGecmisi.add("❌ Sistem: Mesaj gönderilemedi. IP'yi kontrol edin.");
-      });
-    }
-  }
-
-  void _sesliAramayiDegistir() async {
-    if (_hedefIpController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Lütfen önce Hedef IP adresini girin!")),
-      );
-      return;
-    }
-
-    if (_sesliAramaAktifMi) {
-      await _sesKaydedici.stop();
-      await _sesOynatici.stop();
-      setState(() {
-        _sesliAramaAktifMi = false;
-      });
-    } else {
-      await _sesKaydedici.start();
-      await _sesOynatici.start();
-      setState(() {
-        _sesliAramaAktifMi = true;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _tcpMesajSunucusu?.close();
-    _udpSesSoketi?.close();
+  void _aramayiKapat() {
     _sesKaydedici.stop();
     _sesOynatici.stop();
-    _hedefIpController.dispose();
-    _mesajController.dispose();
-    super.dispose();
+    _baglantiSoketi?.destroy();
+    _sunucuSoketi?.close();
+    setState(() {
+      _aramaAktifMi = false;
+      _durumMesaji = "Arama sonlandırıldı.";
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Yerel Ağ Telsizi & SMS", style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("P2P Wi-Fi Sesli Arama")),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1C1C1E),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
+            Text(_durumMesaji, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            const SizedBox(height: 40),
+            
+            if (!_aramaAktifMi) ...[
+              // SUNUCU OLMA BUTONU
+              ElevatedButton.icon(
+                icon: const Icon(Icons.router),
+                label: const Text("1. Telefon: Sunucuyu Başlat"),
+                onPressed: _sunucuBaslat,
               ),
-              child: Column(
-                children: [
-                  Text("Senin IP Adresin: $_cihazIpAdresi", 
-                      style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 4),
-                  const Text("Not: Konuşmak için iki cihazın da aynı ağda olması gerekir.", 
-                      style: TextStyle(color: Colors.white38, fontSize: 11)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _hedefIpController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: "Bağlanılacak Cihazın IP Adresi",
-                hintText: "Örn: 192.168.43.25",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                prefixIcon: const Icon(Icons.router, color: Colors.blue),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _sesliAramaAktifMi ? Colors.red : Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: _sesliAramayiDegistir,
-              icon: Icon(_sesliAramaAktifMi ? Icons.call_end : Icons.call),
-              label: Text(_sesliAramaAktifMi ? "Sesi Kapat (Bağlantıyı Kes)" : "Sesli Aramayı Başlat (Telsiz Modu)",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            ),
-            const SizedBox(height: 20),
-            const Text("SMS / Mesaj geçmişi", style: TextStyle(color: Colors.white54, fontSize: 14)),
-            const Divider(color: Colors.white10),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141415),
-                  borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 20),
+              
+              // İSTEMCİ GİRİŞ ALANI
+              TextField(
+                controller: _ipKontrolcu,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Sunucu Telefonun IP Adresini Girin',
+                  hintText: 'Örn: 192.168.1.35',
                 ),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _mesajGecmisi.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text(_mesajGecmisi[index], 
-                          style: TextStyle(
-                            color: _mesajGecmisi[index].startsWith("Ben:") ? Colors.blue.shade300 : Colors.green.shade300,
-                            fontSize: 15
-                          )),
-                    );
-                  },
-                ),
+                keyboardType: TextInputType.number,
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _mesajController,
-                    decoration: InputDecoration(
-                      hintText: "Mesajınızı yazın...",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
-                  onPressed: _mesajGonder,
-                ),
-              ],
-            ),
+              const SizedBox(height: 10),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.call),
+                label: const Text("2. Telefon: Sunucuya Bağlan"),
+                onPressed: _sunucuyaBaglan,
+              ),
+            ] else ...[
+              // ARAMAYI KAPATMA BUTONU
+              styleElevatedButtonKapat(),
+            ]
           ],
         ),
       ),
+    );
+  }
+
+  Widget styleElevatedButtonKapat() {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+      icon: const Icon(Icons.call_end, color: Colors.white),
+      label: const Text("Aramayı Kapat", style: TextStyle(color: Colors.white)),
+      onPressed: _aramayiKapat,
     );
   }
 }
