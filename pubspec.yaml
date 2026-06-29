@@ -1,6 +1,5 @@
-name: yerel_iletisim_uygulamasi
-description: "Dayanc Yerel Ag Telsiz ve SMS Uygulamasi"
-publish_to: 'none'
+name: wifi_sesli_arama
+description: Wi-Fi üzerinden yerel sesli arama uygulaması.
 version: 1.0.0+1
 
 environment:
@@ -9,14 +8,16 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  
+  # Anlık mikrofon sesini akış (stream) olarak alıp-vermek için
   sound_stream: ^0.3.0
+  
+  # Kullanıcıdan mikrofon ve ağ izinlerini ekranda istemek için
   permission_handler: ^11.3.1
-  network_info_plus: ^6.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
