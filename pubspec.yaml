@@ -1,5 +1,5 @@
-name: dayanc_nav_app
-description: "Dayanc App"
+name: yerel_iletisim_uygulamasi
+description: "Dayanc Yerel Ag Telsiz ve SMS Uygulamasi"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,7 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  google_nav_bar: ^5.0.6
+  sound_stream: ^0.3.0
+  permission_handler: ^11.3.1
+  network_info_plus: ^6.0.0
 
 dev_dependencies:
   flutter_test:
