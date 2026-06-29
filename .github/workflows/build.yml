@@ -8,378 +8,120 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # fallbacklar: subosito action tipik olarak ANDROID_SDK_ROOT ayarlar
+      ANDROID_HOME: ${{ env.ANDROID_HOME }}
+      ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
     steps:
-      - name: Repo Kodlarini Cek
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Java Kurulumu
+      - name: Setup Java (JDK 17)
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Flutter Kurulumu
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
-      - name: Android Dosyalarini ve Projeyi Sifirdan Olustur
+      - name: Show environment & Flutter info (diagnostic)
         run: |
-          flutter create --project-name=yerel_iletisim_uygulamasi --org com.dayanc.telsiz --force .
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-not-set}"
+          flutter --version
+          flutter doctor -v
 
-      - name: pubspec.yaml Dosyasini Otomatik Yaz
+      - name: Create Flutter project (if missing) / ensure android folder
         run: |
-          cat << 'EOF' > pubspec.yaml
-          name: yerel_iletisim_uygulamasi
-          description: "Dayanc Yerel Ag Telsiz ve SMS Uygulamasi"
-          publish_to: 'none'
-          version: 1.0.0+1
+          flutter create . --force --org com.dayanc.telsiz
+          ls -la
 
-          environment:
-            sdk: '>=3.0.0 <4.0.0'
-
-          dependencies:
-            flutter:
-              sdk: flutter
-            sound_stream: ^0.3.0
-            permission_handler: ^11.3.1
-            network_info_plus: ^6.0.0
-
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^3.0.0
-
-          flutter:
-            uses-material-design: true
-          EOF
-
-      - name: main.dart Dosyasini Otomatik Yaz
+      - name: Accept Android SDK licenses (best-effort)
         run: |
-          mkdir -p lib
-          cat << 'EOF' > lib/main.dart
-          import 'dart:io';
-          import 'dart:convert';
-          import 'dart:async';
-          import 'package:flutter/material.dart';
-          import 'package:sound_stream/sound_stream.dart';
-          import 'package:permission_handler/permission_handler.dart';
-          import 'package:network_info_plus/network_info_plus.dart';
+          SDKMANAGER="${ANDROID_SDK_ROOT:-$ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses || true
+          else
+            echo "sdkmanager not found at $SDKMANAGER - skipping license accept (may be fine)."
+          fi
 
-          void main() {
-            WidgetsFlutterBinding.ensureInitialized();
-            runApp(const YerelIletisimUygulamasi());
-          }
-
-          class YerelIletisimUygulamasi extends StatelessWidget {
-            const YerelIletisimUygulamasi({super.key});
-
-            @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                debugShowCheckedModeBanner: false,
-                theme: ThemeData.dark().copyWith(
-                  scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-                  appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF141415)),
-                ),
-                home: const AnaIletisimEkrani(),
-              );
-            }
-          }
-
-          class AnaIletisimEkrani extends StatefulWidget {
-            const AnaIletisimEkrani({super.key});
-
-            @override
-            State<AnaIletisimEkrani> createState() => _AnaIletisimEkraniState();
-          }
-
-          class _AnaIletisimEkraniState extends State<AnaIletisimEkrani> {
-            final SoundStreamRecorder _sesKaydedici = SoundStreamRecorder();
-            final SoundStreamPlayer _sesOynatici = SoundStreamPlayer();
-            
-            ServerSocket? _tcpMesajSunucusu;
-            RawDatagramSocket? _udpSesSoketi;
-            
-            String _cihazIpAdresi = "Yukleniyor...";
-            bool _sesliAramaAktifMi = false;
-
-            final TextEditingController _hedefIpController = TextEditingController();
-            final TextEditingController _mesajController = TextEditingController();
-            final List<String> _mesajGecmisi = [];
-
-            @override
-            void initState() {
-              super.initState();
-              _sistemiVeIzinleriKur();
-            }
-
-            void _sistemiVeIzinleriKur() async {
-              await [Permission.microphone, Permission.phone].request();
-
-              await _sesKaydedici.initialize();
-              await _sesOynatici.initialize();
-
-              final info = NetworkInfo();
-              String? ip = await info.getWifiIP();
-              
-              if (ip == null || ip.isEmpty) {
-                ip = "192.168.43.1 (Veya Wi-Fi Baglanin)";
-              }
-
-              setState(() {
-                _cihazIpAdresi = ip!;
-              });
-
-              try {
-                _tcpMesajSunucusu = await ServerSocket.bind(InternetAddress.anyIPv4, 4444);
-                _tcpMesajSunucusu!.listen((Socket istemci) {
-                  istemci.listen((List<int> veri) {
-                    String gelenMesaj = utf8.decode(veri);
-                    setState(() {
-                      _mesajGecmisi.add("Karsi Taraf: $gelenMesaj");
-                    });
-                  });
-                });
-              } catch (e) {
-                debugPrint("TCP Sunucu Hatasi: $e");
-              }
-
-              try {
-                _udpSesSoketi = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 5555);
-                _udpSesSoketi!.listen((RawSocketEvent etkinlik) {
-                  if (etkinlik == RawSocketEvent.read) {
-                    Datagram? paket = _udpSesSoketi!.receive();
-                    if (paket != null) {
-                      _sesOynatici.writeChunk(paket.data);
-                    }
-                  }
-                });
-              } catch (e) {
-                debugPrint("UDP Soket Hatasi: $e");
-              }
-
-              _sesKaydedici.audioStream.listen((List<int> sesVerisi) {
-                if (_sesliAramaAktifMi && _hedefIpController.text.isNotEmpty) {
-                  try {
-                    _udpSesSoketi?.send(
-                      sesVerisi,
-                      InternetAddress(_hedefIpController.text.trim()),
-                      5555,
-                    );
-                  } catch (e) {
-                    debugPrint("Ses Paketi Gonderim Hatasi: $e");
-                  }
-                }
-              });
-            }
-
-            void _mesajGonder() async {
-              String hedefIp = _hedefIpController.text.trim();
-              String mesaj = _mesajController.text.trim();
-
-              if (hedefIp.isEmpty || mesaj.isEmpty) return;
-
-              try {
-                Socket soket = await Socket.connect(hedefIp, 4444, timeout: const Duration(seconds: 2));
-                soket.write(mesaj);
-                await soket.flush();
-                await soket.close();
-
-                setState(() {
-                  _mesajGecmisi.add("Ben: $mesaj");
-                  _mesajController.clear();
-                });
-              } catch (e) {
-                setState(() {
-                  _mesajGecmisi.add("❌ Sistem: Mesaj gonderilemedi. IP'yi kontrol edin.");
-                });
-              }
-            }
-
-            void _sesliAramayiDegistir() async {
-              if (_hedefIpController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Lutfen once Hedef IP adresini girin!")),
-                );
-                return;
-              }
-
-              if (_sesliAramaAktifMi) {
-                await _sesKaydedici.stop();
-                await _sesOynatici.stop();
-                setState(() {
-                  _sesliAramaAktifMi = false;
-                });
-              } else {
-                await _sesKaydedici.start();
-                await _sesOynatici.start();
-                setState(() {
-                  _sesliAramaAktifMi = true;
-                });
-              }
-            }
-
-            @override
-            void dispose() {
-              _tcpMesajSunucusu?.close();
-              _udpSesSoketi?.close();
-              _sesKaydedici.stop();
-              _sesOynatici.stop();
-              _hedefIpController.dispose();
-              _mesajController.dispose();
-              super.dispose();
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(
-                  title: const Text("Yerel Ag Telsizi & SMS", style: TextStyle(fontWeight: FontWeight.bold)),
-                  centerTitle: true,
-                  elevation: 0,
-                ),
-                body: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1C1C1E),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: Column(
-                          children: [
-                            Text("Senin IP Adresin: $_cihazIpAdresi", 
-                                style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
-                            const SizedBox(height: 4),
-                            const Text("Not: Konusmak icin iki cihazin da ayni agda olmasi gerekir.", 
-                                style: TextStyle(color: Colors.white38, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _hedefIpController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: "Baglanilacak Cihazin IP Adresi",
-                          hintText: "Orn: 192.168.43.25",
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          prefixIcon: const Icon(Icons.router, color: Colors.blue),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _sesliAramaAktifMi ? Colors.red : Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: _sesliAramayiDegistir,
-                        icon: Icon(_sesliAramaAktifMi ? Icons.call_end : Icons.call),
-                        label: Text(_sesliAramaAktifMi ? "Sesi Kapat (Baglantiyi Kes)" : "Sesli Aramayi Baslat (Telsiz Modu)",
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text("SMS / Mesaj gecmisi", style: TextStyle(color: Colors.white54, fontSize: 14)),
-                      const Divider(color: Colors.white10),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF141415),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: ListView.builder(
-                            padding: const EdgeInsets.all(8),
-                            itemCount: _mesajGecmisi.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Text(_mesajGecmisi[index], 
-                                    style: TextStyle(
-                                      color: _mesajGecmisi[index].startsWith("Ben:") ? Colors.blue.shade300 : Colors.green.shade300,
-                                      fontSize: 15
-                                    )),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _mesajController,
-                              decoration: InputDecoration(
-                                hintText: "Mesajinizi yazın...",
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.send, color: Colors.blue),
-                            onPressed: _mesajGonder,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-          }
-          EOF
-
-      - name: Android Ayarlarini ve Izinlerini Otomatik Enjekte Et
+      - name: Debug - show AndroidManifest before modification
         run: |
-          python3 - << 'EOF'
-          # 1. Android Manifest Izinlerini Düzgünce Ekle
-          manifest_path = "android/app/src/main/AndroidManifest.xml"
-          with open(manifest_path, "r") as f:
-              m_content = f.read()
-          
-          permissions = """
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-          """
-          # Izinleri uygulamanın tag'inin hemen üzerine güvenli bir sekilde ekliyoruz
-          m_content = m_content.replace("<application", permissions + "\n    <application")
-          
-          with open(manifest_path, "w") as f:
-              f.write(m_content)
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            echo "---- AndroidManifest.xml (first 200 lines) ----"
+            sed -n '1,200p' android/app/src/main/AndroidManifest.xml || true
+            echo "---- end ----"
+          else
+            echo "AndroidManifest.xml not found yet."
+          fi
 
-          # 2. Ses Paketi Icin MinSdkVersion Degerini 21 Yap
-          gradle_path = "android/app/build.gradle"
-          with open(gradle_path, "r") as f:
-              g_content = f.read()
-          
-          g_content = g_content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
-          
-          with open(gradle_path, "w") as f:
-              f.write(g_content)
-          print("Android manifest ve gradle ayarlari basariyla yapildi!")
-          EOF
+      - name: Safely inject required Android permissions (if missing)
+        run: |
+          python3 - <<'PY'
+          import sys, io, os
+          path = "android/app/src/main/AndroidManifest.xml"
+          if not os.path.exists(path):
+              print("SKIP: AndroidManifest.xml not found at", path)
+              sys.exit(0)
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+          # quick check: if permission already present skip
+          if "android.permission.RECORD_AUDIO" in content:
+              print("Permissions already present, skipping injection.")
+              sys.exit(0)
+          permissions = (
+              '    <uses-permission android:name="android.permission.INTERNET"/>\n'
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n'
+              '    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>\n'
+              '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n'
+          )
+          # Insert permissions before the first <application ...> tag (safe)
+          idx = content.find("<application")
+          if idx != -1:
+              new = content[:idx] + permissions + content[idx:]
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(new)
+              print("Permissions injected before <application> tag.")
+          else:
+              # Fallback: try to insert right after opening <manifest ...> tag end '>'
+              # Find end of the first <manifest ...> start tag
+              mstart = content.find("<manifest")
+              if mstart != -1:
+                  mend = content.find(">", mstart)
+                  if mend != -1:
+                      new = content[:mend+1] + "\n" + permissions + content[mend+1:]
+                      with open(path, "w", encoding="utf-8") as f:
+                          f.write(new)
+                      print("Permissions injected after <manifest> tag (fallback).")
+                      sys.exit(0)
+              print("WARNING: Could not find <application> or <manifest> tag; file left unchanged.")
+          PY
 
-      - name: Paketleri Yukle
+      - name: Debug - show AndroidManifest after modification
+        run: |
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            echo "---- AndroidManifest.xml (first 200 lines) AFTER ----"
+            sed -n '1,200p' android/app/src/main/AndroidManifest.xml || true
+            echo "---- end ----"
+          else
+            echo "AndroidManifest.xml not found."
+          fi
+
+      - name: Get dependencies
         run: flutter pub get
 
-      - name: APK Derle (Release Mode)
+      - name: Build APK (release)
         run: flutter build apk --release
+        # Eğer çok uzun sürerse isterseniz timeout ekleyebilirsiniz
 
-      - name: APKyi Indirilebilir Yap (Artifact)
+      - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Dayanc-Telsiz-SMS-Uygulamasi
           path: build/app/outputs/flutter-apk/app-release.apk
-          
