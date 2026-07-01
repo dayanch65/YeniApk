@@ -9,7 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Sesli arama (mikrofon) kütüphanesi
+  # Sesli aralma (mikrofon) kütüphanesi
   flutter_webrtc: ^0.10.4
   # Node.js santraline bağlanma kütüphanesi
   socket_io_client: ^2.0.3
