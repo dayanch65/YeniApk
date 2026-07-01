@@ -1,169 +1,168 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:sound_stream/sound_stream.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-void main() => runApp(const MaterialApp(home: SesliAramaUygulamasi()));
-
-class SesliAramaUygulamasi extends StatefulWidget {
-  const SesliAramaUygulamasi({Key? key}) : super(key: key);
-
-  @override
-  State<SesliAramaUygulamasi> createState() => _SesliAramaUygulamasiState();
+void main() {
+  runApp(const MaterialApp(home: GercekSesliArama()));
 }
 
-class _SesliAramaUygulamasiState extends State<SesliAramaUygulamasi> {
-  // Ses kütüphanesinin yönetim nesneleri
-  final RecorderStream _sesKaydedici = RecorderStream();
-  final PlayerStream _sesOynatici = PlayerStream();
+class GercekSesliArama extends StatefulWidget {
+  const GercekSesliArama({super.key});
 
-  // Ağ bağlantı nesneleri
-  ServerSocket? _sunucuSoketi;
-  Socket? _baglantiSoketi;
-  
-  final TextEditingController _ipKontrolcu = TextEditingController();
-  bool _aramaAktifMi = false;
-  String _durumMesaji = "Bağlantı bekleniyor...";
+  @override
+  State<GercekSesliArama> createState() => _GercekSesliAramaState();
+}
+
+class _GercekSesliAramaState extends State<GercekSesliArama> {
+  late IO.Socket socket;
+  RTCPeerConnection? _peerConnection;
+  MediaStream? _localStream;
+  String durum = "Santrale Bağlanıyor...";
 
   @override
   void initState() {
     super.initState();
-    _izinleriVeSesiHazirla();
+    _santraleBaglan();
   }
 
-  // Cihazdan mikrofon izni alma ve ses motorunu açma adımı
-  Future<void> _izinleriVeSesiHazirla() async {
-    await Permission.microphone.request();
-    await _sesKaydedici.initialize();
-    await _sesOynatici.initialize();
-  }
-
-  // --- 1. TELEFON: SUNUCU (HOST) OLMA KODLARI ---
-  Future<void> _sunucuBaslat() async {
-    try {
-      // Telefonun Wi-Fi ağındaki her IP'yi dinleyecek şekilde 4444 portundan sunucu açıyoruz
-      _sunucuSoketi = await ServerSocket.bind(InternetAddress.anyIPv4, 4444);
-      setState(() {
-        _durumMesaji = "Sunucu açıldı! Diğer telefondan bu IP'ye bağlanın.";
-      });
-
-      // İkinci telefon bağlandığı an burası tetiklenir
-      _sunucuSoketi!.listen((Socket istemci) {
-        _baglantiSoketi = istemci;
-        _aramayiBaslat();
-      });
-    } catch (e) {
-      setState(() => _durumMesaji = "Sunucu başlatılamadı: $e");
-    }
-  }
-
-  // --- 2. TELEFON: İSTEMCİ (CLIENT) OLMA KODLARI ---
-  Future<void> _sunucuyaBaglan() async {
-    if (_ipKontrolcu.text.isEmpty) return;
-    try {
-      // Kutudan yazılan IP adresine ve 4444 portuna bağlantı isteği atıyoruz
-      _baglantiSoketi = await Socket.connect(_ipKontrolcu.text, 4444);
-      _aramayiBaslat();
-    } catch (e) {
-      setState(() => _durumMesaji = "Bağlantı hatası: $e");
-    }
-  }
-
-  // --- ORTAK SES TRANSFER MANTIĞI ---
-  void _aramayiBaslat() {
-    setState(() {
-      _aramaAktifMi = true;
-      _durumMesaji = "Arama başladı! Konuşabilirsiniz.";
+  // === 1. SANTRALE BAĞLANMA VE DİNLEME ===
+  void _santraleBaglan() {
+    // BURAYA TABLETİNİN IP ADRESİNİ YAZ (Örn: 192.168.1.5)
+    socket = IO.io('http://192.168.1.106:8080', <String, dynamic>{
+      'transports': ['websocket'],
+      'autoConnect': false,
     });
 
-    // Hoparlörü ve mikrofonu aktif ediyoruz
-    _sesKaydedici.start();
-    _sesOynatici.start();
+    socket.connect();
 
-    // A) MİKROFONDAN GELEN SESİ KARŞIYA GÖNDERME:
-    // Mikrofon ortamdaki sesi yakaladıkça bu dinleyici tetiklenir ve veriyi sokete yazar
-    _sesKaydedici.audioStream.listen((Uint8List sesVerisi) {
-      _baglantiSoketi?.add(sesVerisi);
+    socket.onConnect((_) {
+      setState(() => durum = "Santrale Bağlandı 🟢");
     });
 
-    // B) KARŞIDAN GELEN SESİ HOPARLÖRDEN ÇALMA:
-    // Soketten (karşı telefondan) ses verisi geldikçe bunu hoparlör akışına yazıp çaldırıyoruz
-    _baglantiSoketi!.listen(
-      (Uint8List gelenSesVerisi) {
-        _sesOynatici.writeChunk(gelenSesVerisi);
-      },
-      onDone: _aramayiKapat,
-      onError: (e) => _aramayiKapat(),
-    );
+    // Biri bizi ararsa (Teklif gelirse) otomatik cevap ver
+    socket.on('teklif_geldi', (data) async {
+      setState(() => durum = "Arama Geldi, Açılıyor... 📞");
+      await _borulariBagla();
+      
+      // Karşının ses kodunu kaydet
+      await _peerConnection!.setRemoteDescription(
+          RTCSessionDescription(data['sdp'], data['type']));
+      
+      // Kendi cevabımızı (Answer) oluştur ve santralden karşıya yolla
+      RTCSessionDescription answer = await _peerConnection!.createAnswer();
+      await _peerConnection!.setLocalDescription(answer);
+      socket.emit('cevap_gonder', {'sdp': answer.sdp, 'type': answer.type});
+      
+      setState(() => durum = "Konuşuyorsunuz 🎙️");
+    });
+
+    // Aradığımız kişi telefonu açarsa (Cevap gelirse)
+    socket.on('cevap_geldi', (data) async {
+      await _peerConnection!.setRemoteDescription(
+          RTCSessionDescription(data['sdp'], data['type']));
+      setState(() => durum = "Konuşuyorsunuz 🎙️");
+    });
+
+    // Sanal kablo bağlantıları (ICE) gelirse sisteme ekle
+    socket.on('ice_adayi_geldi', (data) {
+      if (data != null) {
+        _peerConnection!.addCandidate(RTCIceCandidate(
+            data['candidate'], data['sdpMid'], data['sdpMLineIndex']));
+      }
+    });
   }
 
+  // === 2. MİKROFONU VE WEB-RTC MOTORUNU AÇMA (BORULARI BAĞLAMA) ===
+  Future<void> _borulariBagla() async {
+    // Google'ın bedava ses yönlendirme sunucuları (STUN)
+    Map<String, dynamic> ayarlar = {
+      "iceServers": [ {"url": "stun:stun.l.google.com:19302"} ]
+    };
+
+    _peerConnection = await createPeerConnection(ayarlar);
+
+    // Kendi mikrofonumuzu açıyoruz
+    final Map<String, dynamic> mikrofonAyari = {'audio': true, 'video': false};
+    _localStream = await navigator.mediaDevices.getUserMedia(mikrofonAyari);
+
+    // Sesi dışarı (Hoparlöre) veriyoruz ki rahat duyulsun
+    Helper.setSpeakerphoneOn(true);
+
+    // Mikrofonumuzdan gelen sesi WebRTC borusuna ekliyoruz
+    _localStream!.getTracks().forEach((track) {
+      _peerConnection!.addTrack(track, _localStream!);
+    });
+
+    // Boru hattı (ICE) oluştukça santral üzerinden karşıya gönder
+    _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
+      socket.emit('ice_adayi_gonder', {
+        'candidate': candidate.candidate,
+        'sdpMid': candidate.sdpMid,
+        'sdpMLineIndex': candidate.sdpMLineIndex
+      });
+    };
+  }
+
+  // === 3. ARAMA YAPMA BUTONU FONKSİYONU ===
+  Future<void> _aramaYap() async {
+    setState(() => durum = "Aranıyor... ⏳");
+    await _borulariBagla();
+
+    // Arama teklifi (Offer) oluştur ve santralden yolla
+    RTCSessionDescription offer = await _peerConnection!.createOffer();
+    await _peerConnection!.setLocalDescription(offer);
+    
+    socket.emit('teklif_gonder', {'sdp': offer.sdp, 'type': offer.type});
+  }
+
+  // Kapatma işlemi
   void _aramayiKapat() {
-    _sesKaydedici.stop();
-    _sesOynatici.stop();
-    _baglantiSoketi?.destroy();
-    _sunucuSoketi?.close();
-    setState(() {
-      _aramaAktifMi = false;
-      _durumMesaji = "Arama sonlandırıldı.";
-    });
+    _localStream?.dispose();
+    _peerConnection?.close();
+    setState(() => durum = "Arama Kapatıldı 🔴");
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("P2P Wi-Fi Sesli Arama")),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
+      backgroundColor: Colors.white,
+      body: SafeArea(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(_durumMesaji, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            const SizedBox(height: 40),
+            // DURUM YAZISI
+            Text(durum, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             
-            if (!_aramaAktifMi) ...[
-              // SUNUCU OLMA BUTONU
-              ElevatedButton.icon(
-                icon: const Icon(Icons.router),
-                label: const Text("1. Telefon: Sunucuyu Başlat"),
-                onPressed: _sunucuBaslat,
+            const SizedBox(height: 50, width: double.infinity),
+
+            // ARAMA BUTONU
+            ElevatedButton.icon(
+              onPressed: _aramaYap,
+              icon: const Icon(Icons.call, size: 25, color: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
-              const SizedBox(height: 20),
-              const Divider(),
-              const SizedBox(height: 20),
-              
-              // İSTEMCİ GİRİŞ ALANI
-              TextField(
-                controller: _ipKontrolcu,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Sunucu Telefonun IP Adresini Girin',
-                  hintText: 'Örn: 192.168.1.35',
-                ),
-                keyboardType: TextInputType.number,
+              label: const Text('Ara', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ),
+
+            const SizedBox(height: 20),
+
+            // KAPATMA BUTONU
+            ElevatedButton.icon(
+              onPressed: _aramayiKapat,
+              icon: const Icon(Icons.call_end, size: 25, color: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               ),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.call),
-                label: const Text("2. Telefon: Sunucuya Bağlan"),
-                onPressed: _sunucuyaBaglan,
-              ),
-            ] else ...[
-              // ARAMAYI KAPATMA BUTONU
-              styleElevatedButtonKapat(),
-            ]
+              label: const Text('Kapat', style: TextStyle(fontSize: 20, color: Colors.white)),
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget styleElevatedButtonKapat() {
-    return ElevatedButton.icon(
-      style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-      icon: const Icon(Icons.call_end, color: Colors.white),
-      label: const Text("Aramayı Kapat", style: TextStyle(color: Colors.white)),
-      onPressed: _aramayiKapat,
     );
   }
 }
