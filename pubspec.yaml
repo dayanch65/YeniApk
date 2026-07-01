@@ -1,5 +1,6 @@
-name: wifi_sesli_aramaa
-description: Wi-Fi üzerinden yerel sesli arama uygulaması.
+name: sesli_arama
+description: A new Flutter project.
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
@@ -8,16 +9,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # Anlık mikrofon sesini akış (stream) olarak alıp-vermek için
-  sound_stream: ^0.3.0
-  
-  # Kullanıcıdan mikrofon ve ağ izinlerini ekranda istemek için
-  permission_handler: ^11.3.1
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
+  # Sesli arama (mikrofon) kütüphanesi
+  flutter_webrtc: ^0.10.4
+  # Node.js santraline bağlanma kütüphanesi
+  socket_io_client: ^2.0.3
 
 flutter:
   uses-material-design: true
