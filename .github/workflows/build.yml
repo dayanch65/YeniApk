@@ -2,7 +2,7 @@ name: Flutter APK Uretici
 
 on:
   push:
-    branches: [ "main" ] # Kod yüklendiğinde otomatik başlar
+    branches: [ "main" ]
 
 jobs:
   build:
@@ -23,14 +23,20 @@ jobs:
         with:
           channel: 'stable'
 
-      # 1. SİHİR: Senin koymadığın Android klasörlerini yoktan var eder
+      # Sadece Android klasörünü oluşturarak hızı artırıyoruz
       - name: Android Dosyalarini Olustur
-        run: flutter create .
+        run: flutter create --platforms=android .
 
-      # 2. SİHİR: İnternet ve Mikrofon izinlerini zorla Android koduna enjekte eder
+      # HATA ÇÖZÜMÜ 1: WebRTC'nin istediği yüksek Android sürümünü zorla ayarlıyoruz
+      - name: Min SDK Versiyonunu 24 Yap
+        run: sed -i 's/flutter.minSdkVersion/24/g' android/app/build.gradle
+
+      # HATA ÇÖZÜMÜ 2: İzinleri bozmadan, tek tek alt alta ekliyoruz
       - name: Izinleri Ekle (Internet ve Mikrofon)
         run: |
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO"/>' android/app/src/main/AndroidManifest.xml
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>' android/app/src/main/AndroidManifest.xml
 
       - name: Paketleri Indir
         run: flutter pub get
