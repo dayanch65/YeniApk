@@ -2,7 +2,7 @@ name: Flutter APK Uretici
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master" ] # Senin deponun adı master
 
 jobs:
   build:
@@ -10,10 +10,12 @@ jobs:
 
     steps:
       - name: Kodlari Cek
-        uses: actions/checkout@v3
+        # v3'tü, GitHub'ın istediği gibi v4 yaptık
+        uses: actions/checkout@v4 
 
       - name: Java Kurulumu
-        uses: actions/setup-java@v3
+        # v3'tü, uyumlu olması için v4 yaptık
+        uses: actions/setup-java@v4 
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -23,15 +25,12 @@ jobs:
         with:
           channel: 'stable'
 
-      # Sadece Android klasörünü oluşturarak hızı artırıyoruz
       - name: Android Dosyalarini Olustur
         run: flutter create --platforms=android .
 
-      # HATA ÇÖZÜMÜ 1: WebRTC'nin istediği yüksek Android sürümünü zorla ayarlıyoruz
       - name: Min SDK Versiyonunu 24 Yap
         run: sed -i 's/flutter.minSdkVersion/24/g' android/app/build.gradle
 
-      # HATA ÇÖZÜMÜ 2: İzinleri bozmadan, tek tek alt alta ekliyoruz
       - name: Izinleri Ekle (Internet ve Mikrofon)
         run: |
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
@@ -45,7 +44,8 @@ jobs:
         run: flutter build apk --release
 
       - name: APK'yi Github'a Yukle
-        uses: actions/upload-artifact@v3
+        # İŞTE HATA VEREN YER BURASIYDI, v4 OLARAK GÜNCELLEDİK
+        uses: actions/upload-artifact@v4 
         with:
           name: SesliArama-APK
           path: build/app/outputs/flutter-apk/app-release.apk
