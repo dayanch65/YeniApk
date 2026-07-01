@@ -1,12 +1,16 @@
-name: Flutter Otomatik Android ve Izin Oluşturucu
+name: Flutter APK Uretici
 
-on: [push] # GitHub'a kodu yüklediğin an çalışır
+on:
+  push:
+    branches: [ "main" ] # Kod yüklendiğinde otomatik başlar
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Kodlari Cek
+        uses: actions/checkout@v3
 
       - name: Java Kurulumu
         uses: actions/setup-java@v3
@@ -19,25 +23,24 @@ jobs:
         with:
           channel: 'stable'
 
-      # 1. ADIM: GitHub senin için tüm Android klasörünü sıfırdan oluşturuyor
-      - name: Android Klasörünü Sıfırdan Yarat
-        run: flutter create --platforms=android .
+      # 1. SİHİR: Senin koymadığın Android klasörlerini yoktan var eder
+      - name: Android Dosyalarini Olustur
+        run: flutter create .
 
-      # 2. ADIM: Sesli arama için gereken Mikrofon ve Wi-Fi izinlerini koda enjekte ediyor
-      - name: Android Izinlerini Otomatik Enjekte Et
+      # 2. SİHİR: İnternet ve Mikrofon izinlerini zorla Android koduna enjekte eder
+      - name: Izinleri Ekle (Internet ve Mikrofon)
         run: |
-          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
-          PERMISSIONS="<uses-permission android:name=\"android:permission.INTERNET\"/>\n    <uses-permission android:name=\"android:permission.RECORD_AUDIO\"/>\n    <uses-permission android:name=\"android:permission.MODIFY_AUDIO_SETTINGS\"/>\n    <uses-permission android:name=\"android:permission.ACCESS_WIFI_STATE\"/>"
-          sed -i "s|<manifest[^>]*>|&\n    $PERMISSIONS|" $MANIFEST_PATH
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>' android/app/src/main/AndroidManifest.xml
 
-      # 3. ADIM: Uygulamayı test edebilmen için APK çıktısı üretiyor
-      - name: APK Çıktısı Üret
-        run: flutter build apk --debug
+      - name: Paketleri Indir
+        run: flutter pub get
 
-      # 4. ADIM: Üretilen APK'yı GitHub Actions panelinden indirilebilir yapıyor
-      - name: APK'yi Yukle
-        uses: actions/upload-artifact@v4
+      - name: APK Derle
+        run: flutter build apk --release
+
+      - name: APK'yi Github'a Yukle
+        uses: actions/upload-artifact@v3
         with:
-          name: sesli-arama-uygulamasi
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: SesliArama-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
           
