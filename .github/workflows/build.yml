@@ -1,52 +1,154 @@
-name: Flutter APK Uretici
+name: Dayanc GNav App Build
 
 on:
   push:
-    branches: [ "master" ] # Senin deponun adı master
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Kodlari Cek
-        # v3'tü, GitHub'ın istediği gibi v4 yaptık
-        uses: actions/checkout@v4 
+      - name: Repo Kodlarini Cek
+        uses: actions/checkout@v4
 
-      - name: Java Kurulumu
-        # v3'tü, uyumlu olması için v4 yaptık
-        uses: actions/setup-java@v4 
+      - name: Java Kurulumu (Guncel v4)
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Flutter Kurulumu
+      - name: Flutter Kurulumu (Guncel v2)
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
-      - name: Android Dosyalarini Olustur
-        run: flutter create --platforms=android .
-
-      - name: Min SDK Versiyonunu 24 Yap
-        run: sed -i 's/flutter.minSdkVersion/24/g' android/app/build.gradle
-
-      - name: Izinleri Ekle (Internet ve Mikrofon)
+      - name: Flutter Projesini Sifirdan Olustur (Android Klasorleri Dahil)
         run: |
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO"/>' android/app/src/main/AndroidManifest.xml
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>' android/app/src/main/AndroidManifest.xml
+          flutter create --project-name=nav_uygulamasi --org com.dayanc.nav --force .
 
-      - name: Paketleri Indir
+      - name: pubspec.yaml Dosyasini Otomatik Yaz (GNav Dahil)
+        run: |
+          cat << 'EOF' > pubspec.yaml
+          name: nav_uygulamasi
+          description: "Dayanc GNav Navigation App"
+          publish_to: 'none'
+          version: 1.0.0+1
+
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            google_nav_bar: ^5.0.6
+
+          dev_dependencies:
+            flutter_test:
+              sdk: flutter
+            flutter_lints: ^3.0.0
+
+          flutter:
+            uses-material-design: true
+          EOF
+
+      - name: main.dart Dosyasini Otomatik Yaz (Senin Tasarimin)
+        run: |
+          mkdir -p lib
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+          import 'package:google_nav_bar/google_nav_bar.dart';
+
+          void main() {
+            runApp(const MyApp());
+          }
+
+          class MyApp extends StatelessWidget {
+            const MyApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData.dark().copyWith(
+                  scaffoldBackgroundColor: const Color(0xFF0A0A0A),
+                  appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF141415)),
+                ),
+                home: const AnaEkran(),
+              );
+            }
+          }
+
+          class AnaEkran extends StatefulWidget {
+            const AnaEkran({super.key});
+
+            @override
+            State<AnaEkran> createState() => _AnaEkranState();
+          }
+
+          class _AnaEkranState extends State<AnaEkran> {
+            int _secilenIndeks = 0;
+
+            final List<Widget> _sayfalar = [
+              const Center(child: Text('Ana Sayfa Icerigi', style: TextStyle(fontSize: 20, color: Colors.white))),
+              const Center(child: Text('Yuklenenler Sayfasi Icerigi', style: TextStyle(fontSize: 20, color: Colors.white))),
+            ];
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Dayanc GNav Projesi'),
+                  centerTitle: true,
+                ),
+                body: _sayfalar[_secilenIndeks],
+                bottomNavigationBar: SafeArea(
+                  child: Container(
+                    margin: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: GNav(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      color: Colors.white,
+                      activeColor: Colors.black,
+                      gap: 10,
+                      padding: const EdgeInsets.all(10),
+                      selectedIndex: _secilenIndeks,
+                      onTabChange: (index) {
+                        setState(() {
+                          _secilenIndeks = index;
+                        });
+                      },
+                      tabs: const [
+                        GButton(
+                          icon: Icons.home,
+                          text: 'ana sayfa',
+                        ),
+                        GButton(
+                          icon: Icons.download,
+                          text: 'yuklenenler sayfasi',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: Bagliliklari Yukle (Paketleri Cek)
         run: flutter pub get
 
-      - name: APK Derle
+      - name: APK Derle (Release Modu)
         run: flutter build apk --release
 
-      - name: APK'yi Github'a Yukle
-        # İŞTE HATA VEREN YER BURASIYDI, v4 OLARAK GÜNCELLEDİK
-        uses: actions/upload-artifact@v4 
+      - name: Derlenen APKyi Yukle ve Indirilebilir Yap (Guncel v4)
+        uses: actions/upload-artifact@v4
         with:
-          name: SesliArama-APK
+          name: Dayanc-GNav-Uygulamasi
           path: build/app/outputs/flutter-apk/app-release.apk
           
