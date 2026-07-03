@@ -24,10 +24,6 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Flutter Projesini Sifirdan Olustur (Android Klasorleri Dahil)
-        run: |
-          flutter create --project-name=nav_uygulamasi --org com.dayanc.nav --force .
-
       - name: pubspec.yaml Dosyasini Otomatik Yaz (GNav Dahil)
         run: |
           cat << 'EOF' > pubspec.yaml
@@ -140,15 +136,20 @@ jobs:
           }
           EOF
 
+      - name: Flutter SDK Kontrol Et
+        run: flutter --version
+
       - name: Bagliliklari Yukle (Paketleri Cek)
         run: flutter pub get
 
+      - name: Lint Kontrol (Hatalar Varsa Bul)
+        run: flutter analyze
+
       - name: APK Derle (Release Modu)
-        run: flutter build apk --release
+        run: flutter build apk --release --verbose
 
       - name: Derlenen APKyi Yukle ve Indirilebilir Yap (Guncel v4)
         uses: actions/upload-artifact@v4
         with:
           name: Dayanc-GNav-Uygulamasi
           path: build/app/outputs/flutter-apk/app-release.apk
-          
