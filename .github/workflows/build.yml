@@ -23,7 +23,7 @@ jobs:
 
       - name: Flutter Yapısını Sıfırdan Üret
         run: |
-          flutter create --project-name=nav_uygulamasi --org com.dayanc.nav --force .
+          flutter create --project-name=nav_uygulamasi --org com.dayanc.nav .
 
       - name: pubspec.yaml Dosyasını Yaz
         run: |
