@@ -1,5 +1,5 @@
-name: sesli_arama
-description: A new Flutter project.
+name: nav_uygulamasi
+description: "Dayanc GNav Navigation App"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,10 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Sesli aralma (mikrofon) küthdüphanesi
-  flutter_webrtc: ^0.10.4
-  # Node.js santraline bağlanma kütüphanesi
-  socket_io_client: ^2.0.3
+  google_nav_bar: ^5.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
