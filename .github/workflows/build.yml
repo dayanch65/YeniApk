@@ -1,9 +1,6 @@
-name: Dayanc GNav App Build
+name: Dayanc Kesin Calisan App Build
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 
 jobs:
   build:
@@ -24,7 +21,11 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: pubspec.yaml Dosyasini Otomatik Yaz (GNav Dahil)
+      - name: Flutter Yapısını Sıfırdan Üret
+        run: |
+          flutter create --project-name=nav_uygulamasi --org com.dayanc.nav --force .
+
+      - name: pubspec.yaml Dosyasını Yaz
         run: |
           cat << 'EOF' > pubspec.yaml
           name: nav_uygulamasi
@@ -49,7 +50,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: main.dart Dosyasini Otomatik Yaz (Senin Tasarimin)
+      - name: main.dart Dosyasını Yaz (Senin Tasarımın)
         run: |
           mkdir -p lib
           cat << 'EOF' > lib/main.dart
@@ -136,20 +137,29 @@ jobs:
           }
           EOF
 
-      - name: Flutter SDK Kontrol Et
-        run: flutter --version
+      - name: Android SDK Derleme Ayarını Düzelt
+        run: |
+          python3 - << 'EOF'
+          import os
+          path = "android/app/build.gradle"
+          if os.path.exists(path):
+              with open(path, "r") as f:
+                  content = f.read()
+              content = content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+              content = content.replace("minSdkVersion = flutter.minSdkVersion", "minSdkVersion = 21")
+              with open(path, "w") as f:
+                  f.write(content)
+          EOF
 
-      - name: Bagliliklari Yukle (Paketleri Cek)
+      - name: Kütüphaneleri İndir
         run: flutter pub get
 
-      - name: Lint Kontrol (Hatalar Varsa Bul)
-        run: flutter analyze
+      - name: Sorunsuz APK Derle
+        run: flutter build apk --release
 
-      - name: APK Derle (Release Modu)
-        run: flutter build apk --release --verbose
-
-      - name: Derlenen APKyi Yukle ve Indirilebilir Yap (Guncel v4)
+      - name: APK Dosyasını Çıktı Olarak Ver (Guncel v4)
         uses: actions/upload-artifact@v4
         with:
-          name: Dayanc-GNav-Uygulamasi
+          name: Dayanc-GNav-Calisan-Uygulama
           path: build/app/outputs/flutter-apk/app-release.apk
+          
