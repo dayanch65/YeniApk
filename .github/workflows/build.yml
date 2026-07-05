@@ -50,7 +50,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: main.dart Dosyasını Otomatik Yaz (Senin Son Kodun)
+      - name: main.dart Dosyasını Otomatik Yaz
         run: |
           mkdir -p lib
           cat << 'EOF' > lib/main.dart
@@ -72,8 +72,8 @@ jobs:
             int _selectedIndex = 0;
 
             final List<Widget> _pages = [
-              const Center(child: Text('1. Sayfa İçeriği')),
-              const Center(child: Text('2. Sayfa İçeriği')),
+              const Center(child: Text('1. Sayfa Icerigi')),
+              const Center(child: Text('2. Sayfa Icerigi')),
             ];
 
             @override
@@ -84,7 +84,7 @@ jobs:
                   color: Colors.red,
                   tabBorder: Border.all(color: Colors.grey, width: 1),
                   tabActiveBorder: Border.all(color: Colors.purple, width: 1),
-                  tabBorderRadius: 15, # İŞTE BURAYI SADECE 15 YAPARAK HATAYI DÜZELTTİK!
+                  tabBorderRadius: 15,
                   tabBackgroundColor: Colors.white.withOpacity(0.1),
                   selectedIndex: _selectedIndex,
                   onTabChange: (index) {
@@ -100,6 +100,20 @@ jobs:
               );
             }
           }
+          EOF
+
+      - name: Android SDK Derleme Ayarını Düzelt
+        run: |
+          python3 - << 'EOF'
+          import os
+          path = "android/app/build.gradle"
+          if os.path.exists(path):
+              with open(path, "r") as f:
+                  content = f.read()
+              content = content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
+              content = content.replace("minSdkVersion = flutter.minSdkVersion", "minSdkVersion = 21")
+              with open(path, "w") as f:
+                  f.write(content)
           EOF
 
       - name: Kütüphaneleri İndir
