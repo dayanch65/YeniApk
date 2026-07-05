@@ -1,4 +1,4 @@
-name: Dayanc Kesin Calisan App Build
+name: Dayanc Yeni GNav App Build
 
 on: [push, workflow_dispatch]
 
@@ -23,13 +23,13 @@ jobs:
 
       - name: Flutter Yapısını Sıfırdan Üret
         run: |
-          flutter create --project-name=nav_uygulamasi --org com.dayanc.nav .
+          flutter create --project-name=gnav_yeni_uygulama --org com.dayanc.gnav2 .
 
-      - name: pubspec.yaml Dosyasını Yaz
+      - name: pubspec.yaml Dosyasını Otomatik Yaz
         run: |
           cat << 'EOF' > pubspec.yaml
-          name: nav_uygulamasi
-          description: "Dayanc GNav Navigation App"
+          name: gnav_yeni_uygulama
+          description: "Dayanc Yeni GNav Tasarimi"
           publish_to: 'none'
           version: 1.0.0+1
 
@@ -50,7 +50,7 @@ jobs:
             uses-material-design: true
           EOF
 
-      - name: main.dart Dosyasını Yaz (Senin Tasarımın)
+      - name: main.dart Dosyasını Otomatik Yaz (Senin Son Kodun)
         run: |
           mkdir -p lib
           cat << 'EOF' > lib/main.dart
@@ -58,97 +58,48 @@ jobs:
           import 'package:google_nav_bar/google_nav_bar.dart';
 
           void main() {
-            runApp(const MyApp());
+            runApp(const MaterialApp(home: HomePage()));
           }
 
-          class MyApp extends StatelessWidget {
-            const MyApp({super.key});
+          class HomePage extends StatefulWidget {
+            const HomePage({super.key});
 
             @override
-            Widget build(BuildContext context) {
-              return MaterialApp(
-                debugShowCheckedModeBanner: false,
-                theme: ThemeData.dark().copyWith(
-                  scaffoldBackgroundColor: const Color(0xFF0A0A0A),
-                  appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF141415)),
-                ),
-                home: const AnaEkran(),
-              );
-            }
+            State<HomePage> createState() => _HomePageState();
           }
 
-          class AnaEkran extends StatefulWidget {
-            const AnaEkran({super.key});
+          class _HomePageState extends State<HomePage> {
+            int _selectedIndex = 0;
 
-            @override
-            State<AnaEkran> createState() => _AnaEkranState();
-          }
-
-          class _AnaEkranState extends State<AnaEkran> {
-            int _secilenIndeks = 0;
-
-            final List<Widget> _sayfalar = [
-              const Center(child: Text('Ana Sayfa Icerigi', style: TextStyle(fontSize: 20, color: Colors.white))),
-              const Center(child: Text('Yuklenenler Sayfasi Icerigi', style: TextStyle(fontSize: 20, color: Colors.white))),
+            final List<Widget> _pages = [
+              const Center(child: Text('1. Sayfa İçeriği')),
+              const Center(child: Text('2. Sayfa İçeriği')),
             ];
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(
-                  title: const Text('Dayanc GNav Projesi'),
-                  centerTitle: true,
-                ),
-                body: _sayfalar[_secilenIndeks],
-                bottomNavigationBar: SafeArea(
-                  child: Container(
-                    margin: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: GNav(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      color: Colors.white,
-                      activeColor: Colors.black,
-                      gap: 10,
-                      padding: const EdgeInsets.all(10),
-                      selectedIndex: _secilenIndeks,
-                      onTabChange: (index) {
-                        setState(() {
-                          _secilenIndeks = index;
-                        });
-                      },
-                      tabs: const [
-                        GButton(
-                          icon: Icons.home,
-                          text: 'ana sayfa',
-                        ),
-                        GButton(
-                          icon: Icons.download,
-                          text: 'yuklenenler sayfasi',
-                        ),
-                      ],
-                    ),
-                  ),
+                body: _pages[_selectedIndex],
+                bottomNavigationBar: GNav(
+                  color: Colors.red,
+                  tabBorder: Border.all(color: Colors.grey, width: 1),
+                  tabActiveBorder: Border.all(color: Colors.purple, width: 1),
+                  tabBorderRadius: BorderRadius.circular(15),
+                  tabBackgroundColor: Colors.white.withOpacity(0.1),
+                  selectedIndex: _selectedIndex,
+                  onTabChange: (index) {
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                  },
+                  tabs: const [
+                    GButton(icon: Icons.home, text: 'Ana Sayfa'),
+                    GButton(icon: Icons.search, text: 'Arama'),
+                  ],
                 ),
               );
             }
           }
-          EOF
-
-      - name: Android SDK Derleme Ayarını Düzelt
-        run: |
-          python3 - << 'EOF'
-          import os
-          path = "android/app/build.gradle"
-          if os.path.exists(path):
-              with open(path, "r") as f:
-                  content = f.read()
-              content = content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
-              content = content.replace("minSdkVersion = flutter.minSdkVersion", "minSdkVersion = 21")
-              with open(path, "w") as f:
-                  f.write(content)
           EOF
 
       - name: Kütüphaneleri İndir
@@ -160,6 +111,6 @@ jobs:
       - name: APK Dosyasını Çıktı Olarak Ver (Guncel v4)
         uses: actions/upload-artifact@v4
         with:
-          name: Dayanc-GNav-Calisan-Uygulama
+          name: Dayanc-Yeni-GNav-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           
