@@ -1,4 +1,4 @@
-name: Dayanc Yeni GNav App Build
+name: Dayanc Web Sitesi Build
 
 on: [push, workflow_dispatch]
 
@@ -10,12 +10,6 @@ jobs:
       - name: Repo Kodlarini Cek
         uses: actions/checkout@v4
 
-      - name: Java Kurulumu (Guncel v4)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
       - name: Flutter Kurulumu (Guncel v2)
         uses: subosito/flutter-action@v2
         with:
@@ -23,13 +17,13 @@ jobs:
 
       - name: Flutter Yapısını Sıfırdan Üret
         run: |
-          flutter create --project-name=gnav_yeni_uygulama --org com.dayanc.gnav2 .
+          flutter create --project-name=gnav_web_uygulama --org com.dayanc.web .
 
       - name: pubspec.yaml Dosyasını Otomatik Yaz
         run: |
           cat << 'EOF' > pubspec.yaml
-          name: gnav_yeni_uygulama
-          description: "Dayanc Yeni GNav Tasarimi"
+          name: gnav_web_uygulama
+          description: "Dayanc Web Sitesi"
           publish_to: 'none'
           version: 1.0.0+1
 
@@ -72,8 +66,8 @@ jobs:
             int _selectedIndex = 0;
 
             final List<Widget> _pages = [
-              const Center(child: Text('1. Sayfa Icerigi')),
-              const Center(child: Text('2. Sayfa Icerigi')),
+              const Center(child: Text('Web Sitesi Ana Sayfa')),
+              const Center(child: Text('Web Sitesi Arama Sayfası')),
             ];
 
             @override
@@ -102,29 +96,15 @@ jobs:
           }
           EOF
 
-      - name: Android SDK Derleme Ayarını Düzelt
-        run: |
-          python3 - << 'EOF'
-          import os
-          path = "android/app/build.gradle"
-          if os.path.exists(path):
-              with open(path, "r") as f:
-                  content = f.read()
-              content = content.replace("minSdkVersion flutter.minSdkVersion", "minSdkVersion 21")
-              content = content.replace("minSdkVersion = flutter.minSdkVersion", "minSdkVersion = 21")
-              with open(path, "w") as f:
-                  f.write(content)
-          EOF
-
       - name: Kütüphaneleri İndir
         run: flutter pub get
 
-      - name: Sorunsuz APK Derle
-        run: flutter build apk --release
+      - name: Web Sitesini Derle
+        run: flutter build web --release
 
-      - name: APK Dosyasını Çıktı Olarak Ver (Guncel v4)
+      - name: Web Dosyalarını İndirilebilir Yap (build/web)
         uses: actions/upload-artifact@v4
         with:
-          name: Dayanc-Yeni-GNav-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: Dayanc-Web-Sitesi
+          path: build/web
           
