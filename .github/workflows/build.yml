@@ -84,7 +84,7 @@ jobs:
                   color: Colors.red,
                   tabBorder: Border.all(color: Colors.grey, width: 1),
                   tabActiveBorder: Border.all(color: Colors.purple, width: 1),
-                  tabBorderRadius: BorderRadius.circular(15),
+                  tabBorderRadius: 15, # İŞTE BURAYI SADECE 15 YAPARAK HATAYI DÜZELTTİK!
                   tabBackgroundColor: Colors.white.withOpacity(0.1),
                   selectedIndex: _selectedIndex,
                   onTabChange: (index) {
