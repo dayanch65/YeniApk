@@ -1,94 +1,102 @@
-name: Dayanc Web Sitesi Build
+name: Dayanc ML Kit App Build
 
 on: [push, workflow_dispatch]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Repo Kodlarini Cek
-        uses: actions/checkout@v4
-
-      - name: Flutter Kurulumu (Guncel v2)
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-
-      - name: Flutter Yapısını Sıfırdan Üret
-        run: |
-          flutter create --project-name=gnav_web_uygulama --org com.dayanc.web .
-
-      - name: pubspec.yaml Dosyasını Otomatik Yaz
-        run: |
+      - run: flutter create --project-name=ml_app .
+      
+      # 1. Pubspec Ayarı
+      - run: |
           cat << 'EOF' > pubspec.yaml
-          name: gnav_web_uygulama
-          description: "Dayanc Web Sitesi"
+          name: ml_app
+          description: "Nesne Tespit Uygulamasi"
           publish_to: 'none'
           version: 1.0.0+1
-
           environment:
             sdk: '>=3.0.0 <4.0.0'
-
           dependencies:
             flutter:
               sdk: flutter
-            google_nav_bar: ^5.0.6
-
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^3.0.0
-
+            google_mlkit_object_detection: ^0.12.0
+            image_picker: ^1.0.7
           flutter:
             uses-material-design: true
           EOF
 
-      - name: main.dart Dosyasını Otomatik Yaz
-        run: |
+      # 2. Android Manifest'e Kamera İzni Ekleme (Hata almamak için şart)
+      - run: |
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA"/>' android/app/src/main/AndroidManifest.xml
+
+      # 3. Main.dart Kodu
+      - run: |
           mkdir -p lib
           cat << 'EOF' > lib/main.dart
+          import 'dart:io';
           import 'package:flutter/material.dart';
-          import 'package:google_nav_bar/google_nav_bar.dart';
+          import 'package:image_picker/image_picker.dart';
+          import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
 
-          void main() {
-            runApp(const MaterialApp(home: HomePage()));
-          }
+          void main() => runApp(const MaterialApp(home: ObjectDetectorView()));
 
-          class HomePage extends StatefulWidget {
-            const HomePage({super.key});
-
+          class ObjectDetectorView extends StatefulWidget {
+            const ObjectDetectorView({super.key});
             @override
-            State<HomePage> createState() => _HomePageState();
+            State<ObjectDetectorView> createState() => _ObjectDetectorViewState();
           }
 
-          class _HomePageState extends State<HomePage> {
-            int _selectedIndex = 0;
+          class _ObjectDetectorViewState extends State<ObjectDetectorView> {
+            File? _image;
+            String _result = "Bir resim seç ve nesneleri bul!";
 
-            final List<Widget> _pages = [
-              const Center(child: Text('Web Sitesi Ana Sayfa')),
-              const Center(child: Text('Web Sitesi Arama Sayfası')),
-            ];
+            Future<void> _pickImage() async {
+              final XFile? image = await ImagePicker().pickImage(source: ImageSource.gallery);
+              if (image != null) {
+                setState(() { _image = File(image.path); _result = "Analiz ediliyor..."; });
+                _detectObjects(File(image.path));
+              }
+            }
+
+            Future<void> _detectObjects(File file) async {
+              final inputImage = InputImage.fromFile(file);
+              final options = ObjectDetectorOptions(
+                  mode: DetectionMode.single,
+                  classifyObjects: true,
+                  multipleObjects: true);
+              final objectDetector = ObjectDetector(options: options);
+              
+              final List<DetectedObject> objects = await objectDetector.processImage(inputImage);
+              
+              String text = "";
+              for (DetectedObject detectedObject in objects) {
+                for (Label label in detectedObject.labels) {
+                  text += "Nesne: ${label.text} (${(label.confidence * 100).toStringAsFixed(0)}%)\n";
+                }
+              }
+              
+              setState(() { _result = text.isEmpty ? "Nesne bulunamadı." : text; });
+              objectDetector.close();
+            }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                body: _pages[_selectedIndex],
-                bottomNavigationBar: GNav(
-                  color: Colors.red,
-                  tabBorder: Border.all(color: Colors.grey, width: 1),
-                  tabActiveBorder: Border.all(color: Colors.purple, width: 1),
-                  tabBorderRadius: 15,
-                  tabBackgroundColor: Colors.white.withOpacity(0.1),
-                  selectedIndex: _selectedIndex,
-                  onTabChange: (index) {
-                    setState(() {
-                      _selectedIndex = index;
-                    });
-                  },
-                  tabs: const [
-                    GButton(icon: Icons.home, text: 'Ana Sayfa'),
-                    GButton(icon: Icons.search, text: 'Arama'),
+                appBar: AppBar(title: const Text("Nesne Tespit")),
+                body: Column(
+                  children: [
+                    _image != null ? Image.file(_image!, height: 300) : const Icon(Icons.image, size: 200),
+                    ElevatedButton(onPressed: _pickImage, child: const Text("Galeriden Resim Seç")),
+                    Padding(padding: const EdgeInsets.all(16), child: Text(_result)),
                   ],
                 ),
               );
@@ -96,15 +104,10 @@ jobs:
           }
           EOF
 
-      - name: Kütüphaneleri İndir
-        run: flutter pub get
-
-      - name: Web Sitesini Derle
-        run: flutter build web --release
-
-      - name: Web Dosyalarını İndirilebilir Yap (build/web)
-        uses: actions/upload-artifact@v4
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
         with:
-          name: Dayanc-Web-Sitesi
-          path: build/web
+          name: Dayanc-ML-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
           
