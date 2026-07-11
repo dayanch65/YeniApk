@@ -1,113 +1,25 @@
-name: Dayanc ML Kit App Build
-
-on: [push, workflow_dispatch]
+name: Super Cached Flutter Builder
+on:
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Flutter SDK'yi GitHub'a İndir
+        run: git clone https://github.com/flutter/flutter.git -b stable C:\flutter
+
+      - name: Tüm Eksik Motor ve Cache Dosyalarını Tamamen Yükle
+        run: |
+          cd C:\flutter
+          .\bin\flutter.bat precache --all-platforms
+
+      - name: Her Şeyi Tek Bir ZIP Dosyası Yap
+        run: Compress-Archive -Path C:\flutter -DestinationPath C:\flutter_hazir.zip
+
+      - name: Hazır Paketi İndirme Bağlantısı Olarak Sun
+        uses: actions/upload-artifact@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-      - run: flutter create --project-name=ml_app .
-      
-      # 1. Pubspec Ayarı
-      - run: |
-          cat << 'EOF' > pubspec.yaml
-          name: ml_app
-          description: "Nesne Tespit Uygulamasi"
-          publish_to: 'none'
-          version: 1.0.0+1
-          environment:
-            sdk: '>=3.0.0 <4.0.0'
-          dependencies:
-            flutter:
-              sdk: flutter
-            google_mlkit_object_detection: ^0.12.0
-            image_picker: ^1.0.7
-          flutter:
-            uses-material-design: true
-          EOF
-
-      # 2. Android Manifest'e Kamera İzni Ekleme (Hata almamak için şart)
-      - run: |
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.CAMERA"/>' android/app/src/main/AndroidManifest.xml
-
-      # 3. Main.dart Kodu
-      - run: |
-          mkdir -p lib
-          cat << 'EOF' > lib/main.dart
-          import 'dart:io';
-          import 'package:flutter/material.dart';
-          import 'package:image_picker/image_picker.dart';
-          import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
-
-          void main() => runApp(const MaterialApp(home: ObjectDetectorView()));
-
-          class ObjectDetectorView extends StatefulWidget {
-            const ObjectDetectorView({super.key});
-            @override
-            State<ObjectDetectorView> createState() => _ObjectDetectorViewState();
-          }
-
-          class _ObjectDetectorViewState extends State<ObjectDetectorView> {
-            File? _image;
-            String _result = "Bir resim seç ve nesneleri bul!";
-
-            Future<void> _pickImage() async {
-              final XFile? image = await ImagePicker().pickImage(source: ImageSource.gallery);
-              if (image != null) {
-                setState(() { _image = File(image.path); _result = "Analiz ediliyor..."; });
-                _detectObjects(File(image.path));
-              }
-            }
-
-            Future<void> _detectObjects(File file) async {
-              final inputImage = InputImage.fromFile(file);
-              final options = ObjectDetectorOptions(
-                  mode: DetectionMode.single,
-                  classifyObjects: true,
-                  multipleObjects: true);
-              final objectDetector = ObjectDetector(options: options);
-              
-              final List<DetectedObject> objects = await objectDetector.processImage(inputImage);
-              
-              String text = "";
-              for (DetectedObject detectedObject in objects) {
-                for (Label label in detectedObject.labels) {
-                  text += "Nesne: ${label.text} (${(label.confidence * 100).toStringAsFixed(0)}%)\n";
-                }
-              }
-              
-              setState(() { _result = text.isEmpty ? "Nesne bulunamadı." : text; });
-              objectDetector.close();
-            }
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                appBar: AppBar(title: const Text("Nesne Tespit")),
-                body: Column(
-                  children: [
-                    _image != null ? Image.file(_image!, height: 300) : const Icon(Icons.image, size: 200),
-                    ElevatedButton(onPressed: _pickImage, child: const Text("Galeriden Resim Seç")),
-                    Padding(padding: const EdgeInsets.all(16), child: Text(_result)),
-                  ],
-                ),
-              );
-            }
-          }
-          EOF
-
-      - run: flutter pub get
-      - run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Dayanc-ML-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: flutter-windows-tam-paket
+          path: C:\flutter_hazir.zip
           
