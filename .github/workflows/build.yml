@@ -1,27 +1,27 @@
-name: Super Cached Flutter Builder
-on: [push] # Buton arama derdi BİTTİ! Dosyayı kaydettiğin an otomatik başlayacak.
+name: Flutter 3.7.12 Android Cache Builder
+on: [push]
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Flutter SDKyi GitHuba Indir
+      - name: Tam Olarak 3.7.12 Sürümünü Indir
         shell: pwsh
-        run: git clone https://github.com/flutter/flutter.git -b stable C:\flutter
+        run: git clone https://github.com/flutter/flutter.git -b 3.7.12 C:\flutter
 
-      - name: Tum Eksik Motor ve Cache Dosyalarini Yukle
+      - name: Sadece Android Eksik Dosyalarini Yukle
         shell: pwsh
         run: |
           cd C:\flutter
-          .\bin\flutter.bat precache --all-platforms
+          .\bin\flutter.bat precache --android
 
-      - name: Her Seyi Tek Bir ZIP Dosyasi Yap
+      - name: Sadece Eksik Olan Cache Klasorunu ZIP Yap
         shell: pwsh
-        run: Compress-Archive -Path C:\flutter -DestinationPath C:\flutter_hazir.zip
+        run: Compress-Archive -Path C:\flutter\bin\cache -DestinationPath C:\flutter_3.7.12_cache.zip
 
-      - name: Hazir Paketi Indirme Baglantisi Olarak Sun
+      - name: Sadece Cache Paketini Sun
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-windows-tam-paket
-          path: C:\flutter_hazir.zip
+          name: flutter-3-7-12-cache
+          path: C:\flutter_3.7.12_cache.zip
           
