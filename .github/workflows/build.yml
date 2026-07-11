@@ -1,6 +1,5 @@
 name: Super Cached Flutter Builder
-on:
-  workflow_dispatch: {}
+on: [push] # Buton arama derdi BİTTİ! Dosyayı kaydettiğin an otomatik başlayacak.
 
 jobs:
   build:
