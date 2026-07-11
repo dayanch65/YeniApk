@@ -1,23 +1,26 @@
-name: Superr Cached Flutter Builder
+name: Super Cached Flutter Builder
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Flutter SDK'yi GitHub'a İndir
+      - name: Flutter SDKyi GitHuba Indir
+        shell: pwsh
         run: git clone https://github.com/flutter/flutter.git -b stable C:\flutter
 
-      - name: Tüm Eksik Motor ve Cache Dosyalarını Tamamen Yükle
+      - name: Tum Eksik Motor ve Cache Dosyalarini Yukle
+        shell: pwsh
         run: |
           cd C:\flutter
           .\bin\flutter.bat precache --all-platforms
 
-      - name: Her Şeyi Tek Bir ZIP Dosyası Yap
+      - name: Her Seyi Tek Bir ZIP Dosyasi Yap
+        shell: pwsh
         run: Compress-Archive -Path C:\flutter -DestinationPath C:\flutter_hazir.zip
 
-      - name: Hazır Paketi İndirme Bağlantısı Olarak Sun
+      - name: Hazir Paketi Indirme Baglantisi Olarak Sun
         uses: actions/upload-artifact@v4
         with:
           name: flutter-windows-tam-paket
